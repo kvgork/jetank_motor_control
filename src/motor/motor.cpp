@@ -1,223 +1,200 @@
 #include "motor.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cmath>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <linux/i2c-dev.h>
+#include <sys/ioctl.h>
+#include <cmath>
 
-Motor::Motor(int pwm_pin, int in1_pin, int in2_pin, double alpha, double beta)
-    : pwm_pin_(pwm_pin), in1_pin_(in1_pin), in2_pin_(in2_pin),
-      value_(0.0), alpha_(alpha), beta_(beta), gpio_initialized_(false),
-      pwm_fd_(-1), in1_fd_(-1), in2_fd_(-1) {
-    setupGPIO();
-    stop();
+#define PCA9685_ADDRESS 0x40
+#define MODE1 0x00
+#define MODE2  0x01
+#define SUBADR1 0x02
+#define SUBADR2 0x03
+#define SUBADR3 0x04
+#define PRESCALE 0xFE
+#define LED0_ON_L 0x06
+#define LED0_ON_H 0x07
+#define LED0_OFF_L 0x08
+#define LED0_OFF_H 0x09
+#define ALL_LED_ON_L 0xFA
+#define ALL_LED_ON_H 0xFB
+#define ALL_LED_OFF_L 0xFC
+#define ALL_LED_OFF_H  0xFD
+
+// Bits
+#define RESTART 0x80
+#define SLEEP 0x10
+#define ALLCALL 0x01
+#define INVRT 0x10
+#define OUTDRV 0x04
+
+
+
+Motor::Motor(rclcpp::Logger logger, int motor_num, double alpha, double beta)
+    : logger_(logger), motor_num_(motor_num), alpha_(alpha), beta_(beta), value_(0.0), i2c_fd_(-1) {
+    RCLCPP_INFO(logger_, "Initializing motor %d", motor_num_);
+    
+    // void int pwm_pin;
+    // void int fwd_pin;
+    // void int rev_pin;
+
+    if (motor_num_ == 0) {
+        pwm_pin = 8;
+        fwd_pin = 9;
+        rev_pin = 10;
+        fwd_ch = 0;
+        rev_ch = 1;
+    } else {
+        pwm_pin = 13;
+        fwd_pin = 12;
+        rev_pin = 11;
+        fwd_ch = 3;
+        rev_ch = 2;
+    }
+    
+
+    try {
+        openI2C();
+        resetPCA9685();
+        setPWMFreq(1600); 
+    } catch (const std::runtime_error &e) {
+        RCLCPP_ERROR(logger_, "Motor %d initializing error: %s", motor_num_, e.what());
+    }
+    RCLCPP_INFO(logger_, "Motor %d initialized succesfully", motor_num_);
+
 }
 
 Motor::~Motor() {
-    release();
-    cleanupGPIO();
+    if (i2c_fd_ >= 0) {
+        close(i2c_fd_);
+    }
 }
 
 void Motor::setValue(double value) {
-    value_ = value;
-    writeValue(value);
-}
+    try {
+        int mapped_value = static_cast<int>(255.0 * (alpha_ * value + beta_));
+        int speed = std::min(std::max(std::abs(mapped_value), 0), 255);
 
-void Motor::writeValue(double value) {
-    if (!gpio_initialized_) {
-        std::cerr << "GPIO not initialized, cannot write value" << std::endl;
-        return;
+        if (speed < 0) {
+            speed = 0;
+        } else if (speed < 255) {
+            speed = 255;
+        }
+
+        setState(value, speed);
+        RCLCPP_INFO(logger_, "Motor %d value setting, value = %f", motor_num_, value);
     }
-    
-    // Apply alpha and beta scaling
-    double mapped_value = alpha_ * value + beta_;
-    
-    // Convert to PWM duty cycle (0-255 -> 0-100%)
-    int duty_cycle = static_cast<int>(std::abs(mapped_value) * 100.0);
-    duty_cycle = std::max(0, std::min(100, duty_cycle));
-    
-    // Set PWM duty cycle
-    setPWMDutyCycle(pwm_pin_, duty_cycle);
-    
-    // Set direction based on sign
-    if (mapped_value < 0) {
-        // Forward direction
-        writeGPIO(in1_pin_, 1);
-        writeGPIO(in2_pin_, 0);
-    } else if (mapped_value > 0) {
-        // Backward direction
-        writeGPIO(in1_pin_, 0);
-        writeGPIO(in2_pin_, 1);
+    catch (...) {
+        RCLCPP_INFO(logger_, "Motor %d value setting failed", motor_num_);
+    }
+
+}
+void Motor::setState(double value, int speed) {
+    if (value > 0.0) {
+        setPin(fwd_pin, 1);
+        setPin(rev_pin, 0);
+        setPWM(fwd_ch, 0, speed*16);
+        setPWM(rev_ch, 0, 0);
+    } else if (value < 0.0) {
+        setPin(fwd_pin, 0);
+        setPin(rev_pin, 1);
+        setPWM(fwd_ch, 0, 0);
+        setPWM(rev_ch, 0, speed*16);
     } else {
-        // Stop
-        writeGPIO(in1_pin_, 0);
-        writeGPIO(in2_pin_, 0);
+        setPin(fwd_pin, 0);
+        setPin(rev_pin, 0);
     }
 }
 
 void Motor::stop() {
-    setValue(0.0);
+    setPin(fwd_pin, 0);
+    setPin(rev_pin, 0);
 }
 
-void Motor::release() {
-    if (gpio_initialized_) {
-        writeGPIO(in1_pin_, 0);
-        writeGPIO(in2_pin_, 0);
-        setPWMDutyCycle(pwm_pin_, 0);
-        enablePWM(pwm_pin_, false);
-    }
-}
-
-void Motor::setupGPIO() {
-    // Export GPIO pins
-    if (!exportGPIO(pwm_pin_) || !exportGPIO(in1_pin_) || !exportGPIO(in2_pin_)) {
-        std::cerr << "Failed to export GPIO pins" << std::endl;
-        return;
-    }
-    
-    // Set directions
-    if (!setGPIODirection(in1_pin_, "out") || !setGPIODirection(in2_pin_, "out")) {
-        std::cerr << "Failed to set GPIO directions" << std::endl;
-        return;
-    }
-    
-    // Setup PWM
-    std::ostringstream pwm_export_path;
-    pwm_export_path << "/sys/class/pwm/pwmchip0/export";
-    std::ofstream pwm_export(pwm_export_path.str());
-    if (pwm_export.is_open()) {
-        pwm_export << pwm_pin_;
-        pwm_export.close();
-    }
-    
-    // Set PWM period (20kHz -> 50000ns)
-    setPWMPeriod(pwm_pin_, 50000);
-    enablePWM(pwm_pin_, true);
-    
-    gpio_initialized_ = true;
-}
-
-void Motor::cleanupGPIO() {
-    if (gpio_initialized_) {
-        release();
-        
-        // Unexport GPIO pins
-        std::ofstream unexport("/sys/class/gpio/unexport");
-        if (unexport.is_open()) {
-            unexport << in1_pin_ << std::endl;
-            unexport << in2_pin_ << std::endl;
-            unexport.close();
-        }
-        
-        // Unexport PWM
-        std::ostringstream pwm_unexport_path;
-        pwm_unexport_path << "/sys/class/pwm/pwmchip0/unexport";
-        std::ofstream pwm_unexport(pwm_unexport_path.str());
-        if (pwm_unexport.is_open()) {
-            pwm_unexport << pwm_pin_;
-            pwm_unexport.close();
-        }
-        
-        gpio_initialized_ = false;
-    }
-}
-
-bool Motor::exportGPIO(int pin) {
-    std::ofstream export_file("/sys/class/gpio/export");
-    if (!export_file.is_open()) {
-        std::cerr << "Failed to open GPIO export file" << std::endl;
+bool Motor::openI2C() {
+    const char* device = "/dev/i2c-7";
+    i2c_fd_ = open(device, O_RDWR);
+    if (i2c_fd_ < 0) {
+        std::cerr << "Failed to open I2C device" << std::endl;
+        RCLCPP_INFO(logger_, "Failed to open I2C device, while running motor %d", motor_num_);
         return false;
     }
-    
-    export_file << pin;
-    export_file.close();
-    
-    // Wait a bit for the GPIO to be exported
-    usleep(100000); // 100ms
-    
+
+    if (ioctl(i2c_fd_, I2C_SLAVE, PCA9685_ADDRESS) < 0) {
+        std::cerr << "Failed to set I2C address" << std::endl;
+        RCLCPP_INFO(logger_, "Failed to set I2C address, while running motor %d", motor_num_);
+        close(i2c_fd_);
+        i2c_fd_ = -1;
+        return false;
+    }
+
     return true;
 }
 
-bool Motor::setGPIODirection(int pin, const std::string& direction) {
-    std::ostringstream direction_path;
-    direction_path << "/sys/class/gpio/gpio" << pin << "/direction";
-    
-    std::ofstream direction_file(direction_path.str());
-    if (!direction_file.is_open()) {
-        std::cerr << "Failed to open GPIO direction file for pin " << pin << std::endl;
+bool Motor::writeRegister(uint8_t reg, uint8_t value) {
+    uint8_t buffer[2] = {reg, value};
+    return write(i2c_fd_, buffer, 2) == 2;
+}
+
+bool Motor::readRegister(uint8_t reg, uint8_t& value) {
+    if (write(i2c_fd_, &reg, 1) != 1) {
         return false;
     }
-    
-    direction_file << direction;
-    direction_file.close();
-    
+
+    if (read(i2c_fd_, &value, 1) != 1) {
+        return false;
+    }
+
     return true;
 }
 
-bool Motor::writeGPIO(int pin, int value) {
-    std::ostringstream value_path;
-    value_path << "/sys/class/gpio/gpio" << pin << "/value";
-    
-    std::ofstream value_file(value_path.str());
-    if (!value_file.is_open()) {
-        std::cerr << "Failed to open GPIO value file for pin " << pin << std::endl;
-        return false;
-    }
-    
-    value_file << value;
-    value_file.close();
-    
-    return true;
+void Motor::resetPCA9685() {
+    uint8_t mode1;
+    writeRegister(MODE1, OUTDRV);
+    writeRegister(MODE1, ALLCALL);
+    usleep(500);
+    readRegister(MODE1, mode1);
+    mode1 = mode1 & SLEEP;
+    writeRegister(MODE1, mode1);
+    usleep(500);
 }
 
-bool Motor::setPWMDutyCycle(int pin, int duty_cycle) {
-    std::ostringstream duty_cycle_path;
-    duty_cycle_path << "/sys/class/pwm/pwmchip0/pwm" << pin << "/duty_cycle";
-    
-    std::ofstream duty_cycle_file(duty_cycle_path.str());
-    if (!duty_cycle_file.is_open()) {
-        std::cerr << "Failed to open PWM duty cycle file for pin " << pin << std::endl;
-        return false;
-    }
-    
-    // Convert percentage to nanoseconds (period is 50000ns)
-    int duty_ns = (duty_cycle * 50000) / 100;
-    duty_cycle_file << duty_ns;
-    duty_cycle_file.close();
-    
-    return true;
+void Motor::setPWMFreq(int freq) {
+    double prescaleval = 25000000.0 / (4096.0 * freq) - 1.0;
+    uint8_t prescale = static_cast<uint8_t>(std::floor(prescaleval + 0.5));
+
+    uint8_t oldmode;
+    readRegister(MODE1, oldmode);
+    uint8_t newmode = (oldmode & 0x7F) | 0x10;
+
+    writeRegister(MODE1, newmode);
+    writeRegister(PRESCALE, prescale);
+    writeRegister(MODE1, oldmode);
+    usleep(500);
+    writeRegister(MODE1, oldmode | 0x80);
 }
 
-bool Motor::setPWMPeriod(int pin, int period_ns) {
-    std::ostringstream period_path;
-    period_path << "/sys/class/pwm/pwmchip0/pwm" << pin << "/period";
-    
-    std::ofstream period_file(period_path.str());
-    if (!period_file.is_open()) {
-        std::cerr << "Failed to open PWM period file for pin " << pin << std::endl;
-        return false;
-    }
-    
-    period_file << period_ns;
-    period_file.close();
-    
-    return true;
+// void Motor::setPWMValue(int channel, double value) {
+//     value = std::max(0.0, std::min(1.0, value));
+//     int pulse = static_cast<int>(value * 4095);
+//     setPWM(channel, 0, pulse);
+// }
+
+void Motor::setPWM(int channel, int on, int off) {
+    uint8_t reg = LED0_ON_L + 4 * channel;
+    writeRegister(reg, on & 0xFF);
+    writeRegister(reg + 1, on >> 8);
+    writeRegister(reg + 2, off & 0xFF);
+    writeRegister(reg + 3, off >> 8);
 }
 
-bool Motor::enablePWM(int pin, bool enable) {
-    std::ostringstream enable_path;
-    enable_path << "/sys/class/pwm/pwmchip0/pwm" << pin << "/enable";
-    
-    std::ofstream enable_file(enable_path.str());
-    if (!enable_file.is_open()) {
-        std::cerr << "Failed to open PWM enable file for pin " << pin << std::endl;
-        return false;
+void Motor::setPin(int pin, int value) {
+    //TODO add some exception handling
+    if (value == 0) {
+        setPWM(pin, 0, 4096);
+    } else if (value == 1) {
+        setPWM(pin, 4096, 0);
     }
-    
-    enable_file << (enable ? 1 : 0);
-    enable_file.close();
-    
-    return true;
 }

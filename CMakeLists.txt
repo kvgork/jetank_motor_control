@@ -22,6 +22,8 @@ find_package(trajectory_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 # find_package(serial REQUIRED) Not in ROS2
 find_package(diagnostic_msgs REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GPIOD REQUIRED libgpiod)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -38,13 +40,17 @@ endif()
 add_executable(robot_controller 
   src/motor/robot_controller
   src/motor/motor.cpp)
-ament_target_dependencies(robot_controller rclcpp geometry_msgs std_msgs)
-
-include_directories(include)
 
 add_library(jetank_motor_lib
     src/motor/motor.cpp
 )
+
+ament_target_dependencies(robot_controller rclcpp geometry_msgs std_msgs)
+ament_target_dependencies(jetank_motor_lib rclcpp)
+
+include_directories(include)
+
+
 
 # Install
 install(TARGETS robot_controller
@@ -53,5 +59,13 @@ install(TARGETS robot_controller
 # Install headers
 install(DIRECTORY include/
   DESTINATION include/)
+
+target_include_directories(robot_controller PRIVATE ${GPIOD_INCLUDE_DIRS})
+target_link_libraries(robot_controller ${GPIOD_LIBRARIES})
+
+target_include_directories(jetank_motor_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
 ament_package()
