@@ -203,12 +203,6 @@ void Motor::setPWMFreq(int freq) {
     writeRegister(MODE1, oldmode | 0x80);
 }
 
-// void Motor::setPWMValue(int channel, double value) {
-//     value = std::max(0.0, std::min(1.0, value));
-//     int pulse = static_cast<int>(value * 4095);
-//     setPWM(channel, 0, pulse);
-// }
-
 void Motor::setPWM(int channel, int on, int off) {
     uint8_t reg = LED0_ON_L + 4 * channel;
     writeRegister(reg, on & 0xFF);
@@ -218,10 +212,27 @@ void Motor::setPWM(int channel, int on, int off) {
 }
 
 void Motor::setPin(int pin, int value) {
-    //TODO add some exception handling
-    if (value == 0) {
-        setPWM(pin, 0, 4096);
-    } else if (value == 1) {
-        setPWM(pin, 4096, 0);
+    // Validate pin number
+    if (pin < 0 || pin > 15) {
+        RCLCPP_ERROR(logger_, "Invalid pin number: %d. Pin must be between 0 and 15", pin);
+        return;
+    }
+    
+    // Validate value parameter
+    if (value != 0 && value != 1) {
+        RCLCPP_ERROR(logger_, "Invalid value: %d. Value must be 0 or 1", value);
+        return;
+    }
+    
+    try {
+        if (value == 0) {
+            setPWM(pin, 0, 4096);
+            RCLCPP_DEBUG(logger_, "Set pin %d to LOW (0)", pin);
+        } else if (value == 1) {
+            setPWM(pin, 4096, 0);
+            RCLCPP_DEBUG(logger_, "Set pin %d to HIGH (1)", pin);
+        }
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(logger_, "Failed to set PWM on pin %d: %s", pin, e.what());
     }
 }

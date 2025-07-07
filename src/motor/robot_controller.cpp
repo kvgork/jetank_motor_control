@@ -31,9 +31,6 @@ public:
         max_linear_velocity_ = this->get_parameter("max_linear_velocity").as_double();
         max_angular_velocity_ = this->get_parameter("max_angular_velocity").as_double();
 
-        // Initialize Motor class
-        // Motor::initialize(i2c_bus, pca9685_address);
-
         left_motor_ = std::make_unique<Motor>(this->get_logger(), left_motor, left_alpha, left_beta);
         right_motor_ = std::make_unique<Motor>(this->get_logger(), right_motor, right_alpha, right_beta);
 
