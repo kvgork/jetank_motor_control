@@ -27,7 +27,7 @@ private:
     void setPWMValue(int channel, double value);
     void setPWM(int channel, int on, int off);
     void setPin(int pin, int value);
-    void setState(double value, int speed);
+    void setState(int value, int speed);
 };
 
 #endif

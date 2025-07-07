@@ -14,8 +14,8 @@ public:
         this->declare_parameter<int>("right_motor", 1);
         this->declare_parameter<double>("left_motor_alpha", 1.0);
         this->declare_parameter<double>("right_motor_alpha", 1.0);
-        // this->declare_parameter<int>("i2c_bus", 1);
-        // this->declare_parameter<int>("pca9685_address", 0x60);
+        this->declare_parameter<double>("left_motor_beta", 0.0);   // Add beta parameters
+        this->declare_parameter<double>("right_motor_beta", 0.0);
         this->declare_parameter<double>("track_width", 0.11);
         this->declare_parameter<double>("max_linear_velocity", 1.0);
         this->declare_parameter<double>("max_angular_velocity", 2.0);
@@ -25,8 +25,8 @@ public:
         int right_motor = this->get_parameter("right_motor").as_int();
         double left_alpha = this->get_parameter("left_motor_alpha").as_double();
         double right_alpha = this->get_parameter("right_motor_alpha").as_double();
-        // int i2c_bus = this->get_parameter("i2c_bus").as_int();
-        // int pca9685_address = this->get_parameter("pca9685_address").as_int();
+        double left_beta = this->get_parameter("left_motor_beta").as_double();
+        double right_beta = this->get_parameter("right_motor_beta").as_double();
         track_width_ = this->get_parameter("track_width").as_double();
         max_linear_velocity_ = this->get_parameter("max_linear_velocity").as_double();
         max_angular_velocity_ = this->get_parameter("max_angular_velocity").as_double();
@@ -34,8 +34,8 @@ public:
         // Initialize Motor class
         // Motor::initialize(i2c_bus, pca9685_address);
 
-        left_motor_ = std::make_unique<Motor>(this->get_logger(), left_motor, left_alpha);
-        right_motor_ = std::make_unique<Motor>(this->get_logger(), right_motor, right_alpha);
+        left_motor_ = std::make_unique<Motor>(this->get_logger(), left_motor, left_alpha, left_beta);
+        right_motor_ = std::make_unique<Motor>(this->get_logger(), right_motor, right_alpha, right_beta);
 
         stop();
 

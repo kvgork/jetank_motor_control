@@ -7,7 +7,7 @@
 #include <sys/ioctl.h>
 #include <cmath>
 
-#define PCA9685_ADDRESS 0x40
+#define PCA9685_ADDRESS 0x60
 #define MODE1 0x00
 #define MODE2  0x01
 #define SUBADR1 0x02
@@ -34,11 +34,8 @@
 
 Motor::Motor(rclcpp::Logger logger, int motor_num, double alpha, double beta)
     : logger_(logger), motor_num_(motor_num), alpha_(alpha), beta_(beta), value_(0.0), i2c_fd_(-1) {
-    RCLCPP_INFO(logger_, "Initializing motor %d", motor_num_);
-    
-    // void int pwm_pin;
-    // void int fwd_pin;
-    // void int rev_pin;
+    RCLCPP_INFO(logger_, "Initializing motor %d with alpha=%.3f, beta=%.3f", 
+                motor_num_, alpha_, beta_);
 
     if (motor_num_ == 0) {
         pwm_pin = 8;
@@ -56,7 +53,9 @@ Motor::Motor(rclcpp::Logger logger, int motor_num, double alpha, double beta)
     
 
     try {
-        openI2C();
+        if (!openI2C()) {
+            throw std::runtime_error("Failed to open I2C connection");
+        }
         resetPCA9685();
         setPWMFreq(1600); 
     } catch (const std::runtime_error &e) {
@@ -79,11 +78,11 @@ void Motor::setValue(double value) {
 
         if (speed < 0) {
             speed = 0;
-        } else if (speed < 255) {
+        } else if (speed > 255) {
             speed = 255;
         }
 
-        setState(value, speed);
+        setState(mapped_value, speed);
         RCLCPP_INFO(logger_, "Motor %d value setting, value = %f", motor_num_, value);
     }
     catch (...) {
@@ -91,21 +90,24 @@ void Motor::setValue(double value) {
     }
 
 }
-void Motor::setState(double value, int speed) {
-    if (value > 0.0) {
+void Motor::setState(int value, int speed) {
+
+    setPWM(pwm_pin, 0, speed*16);
+    if (value > 0) {
         setPin(fwd_pin, 1);
         setPin(rev_pin, 0);
         setPWM(fwd_ch, 0, speed*16);
         setPWM(rev_ch, 0, 0);
-    } else if (value < 0.0) {
+    } else if (value < 0) {
         setPin(fwd_pin, 0);
         setPin(rev_pin, 1);
-        setPWM(fwd_ch, 0, 0);
         setPWM(rev_ch, 0, speed*16);
+        setPWM(fwd_ch, 0, 0);
     } else {
         setPin(fwd_pin, 0);
         setPin(rev_pin, 0);
     }
+    
 }
 
 void Motor::stop() {
@@ -130,12 +132,23 @@ bool Motor::openI2C() {
         return false;
     }
 
+    RCLCPP_INFO(logger_, "I2C successfull, while running motor %d", motor_num_);
     return true;
 }
 
 bool Motor::writeRegister(uint8_t reg, uint8_t value) {
+    if (i2c_fd_ < 0) {
+        RCLCPP_ERROR(logger_, "I2C not initialized");
+        return false;
+    }
+    
     uint8_t buffer[2] = {reg, value};
-    return write(i2c_fd_, buffer, 2) == 2;
+    int result = write(i2c_fd_, buffer, 2);
+    if (result != 2) {
+        RCLCPP_ERROR(logger_, "I2C write failed: reg=0x%02X, value=0x%02X", reg, value);
+        return false;
+    }
+    return true;
 }
 
 bool Motor::readRegister(uint8_t reg, uint8_t& value) {
@@ -151,14 +164,28 @@ bool Motor::readRegister(uint8_t reg, uint8_t& value) {
 }
 
 void Motor::resetPCA9685() {
-    uint8_t mode1;
-    writeRegister(MODE1, OUTDRV);
+    // Reset sequence
+    writeRegister(MODE1, 0x00);  // Clear all bits first
+    usleep(1000);
+    
+    // Wake up (clear sleep bit) and enable auto-increment
     writeRegister(MODE1, ALLCALL);
-    usleep(500);
+    usleep(1000);
+    
+    // Read current mode
+    uint8_t mode1;
     readRegister(MODE1, mode1);
-    mode1 = mode1 & SLEEP;
+    
+    // Clear sleep bit (wake up)
+    mode1 = mode1 & ~SLEEP;  // Clear sleep bit
     writeRegister(MODE1, mode1);
-    usleep(500);
+    usleep(1000);
+    
+    // Set output driver to totem pole
+    writeRegister(MODE2, OUTDRV);
+    usleep(1000);
+    
+    RCLCPP_INFO(logger_, "PCA9685 reset completed");
 }
 
 void Motor::setPWMFreq(int freq) {
