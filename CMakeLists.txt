@@ -38,7 +38,7 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(robot_controller 
-  src/motor/robot_controller
+  src/motor/robot_controller.cpp
   src/motor/motor.cpp)
 
 add_library(jetank_motor_lib
