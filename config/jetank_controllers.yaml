@@ -17,6 +17,10 @@ controller_manager:
     gripper_controller:
       type: position_controllers/JointGroupPositionController
 
+    # Diff Drive Controller - Mobile base control (simulation only)
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
 
 # ============================================
 # ARM CONTROLLER (5-DOF)
@@ -83,3 +87,47 @@ gripper_controller:
 
     # Interface names for sending commands
     interface_name: position
+
+
+# ============================================
+# DIFF DRIVE CONTROLLER (Mobile Base)
+# ============================================
+diff_drive_controller:
+  ros__parameters:
+    # Wheel configuration (4-wheel differential drive)
+    left_wheel_names: ["front_left_wheel_joint", "rear_left_wheel_joint"]
+    right_wheel_names: ["front_right_wheel_joint", "rear_right_wheel_joint"]
+
+    # Geometry (from wheels.xacro)
+    wheel_separation: 0.14  # Track width: 2 * 0.07m = 0.14m
+    wheel_radius: 0.03      # From wheels.xacro
+
+    # Command and odometry
+    publish_rate: 50.0
+    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+
+    # Frame IDs
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+
+    # Velocity and acceleration limits (conservative for small robot)
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 0.5  # m/s
+    linear.x.min_velocity: -0.5
+    linear.x.has_acceleration_limits: true
+    linear.x.max_acceleration: 1.0
+    linear.x.min_acceleration: -1.0
+
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 2.0  # rad/s
+    angular.z.min_velocity: -2.0
+    angular.z.has_acceleration_limits: true
+    angular.z.max_acceleration: 3.0
+    angular.z.min_acceleration: -3.0
+
+    # Enable odometry transform
+    enable_odom_tf: true
+
+    # Command timeout (stop if no command received)
+    cmd_vel_timeout: 0.5  # 500ms (matches robot_controller.cpp pattern)
