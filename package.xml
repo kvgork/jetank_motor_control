@@ -9,26 +9,45 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Core ROS2 -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>pluginlib</depend>
+
+  <!-- Messages -->
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>control_msgs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>std_srvs</depend>
+
+  <!-- ros2_control -->
   <depend>ros2_control</depend>
   <depend>ros2_controllers</depend>
   <depend>controller_manager</depend>
   <depend>hardware_interface</depend>
+
+  <!-- Controllers -->
+  <depend>joint_trajectory_controller</depend>
+  <depend>position_controllers</depend>
+  <depend>joint_state_broadcaster</depend>
+
+  <!-- Gazebo simulation -->
+  <depend>gazebo_ros2_control</depend>
+
+  <!-- Robot description -->
+  <depend>xacro</depend>
   <depend>joint_state_publisher</depend>
   <depend>robot_state_publisher</depend>
-  <depend>trajectory_msgs</depend>
-  <depend>std_srvs</depend>
-  <!-- <depend>serial</depend> -->
-  <depend>diagnostic_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
+    <!-- Hardware interface plugin export (for future real hardware) -->
+    <hardware_interface plugin="${prefix}/jetank_hardware.xml"/>
   </export>
 </package>

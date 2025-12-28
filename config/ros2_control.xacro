@@ -1,0 +1,149 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ros2_control configuration for JeTank -->
+  <!-- Supports both simulation (Gazebo) and real hardware (serial servos) -->
+
+  <!-- Servo mapping (5 physical servos):
+       - Servo ID 1: S1_joint (base rotation)
+       - Servo ID 2: S2_joint (shoulder)
+       - Servo ID 3: S3_joint (elbow)
+       - Servo ID 4: S4_joint (wrist pitch) OR gripper
+       - Servo ID 5: S5_joint (wrist roll) OR camera
+
+       Note: Exact mapping depends on hardware configuration
+  -->
+
+  <xacro:macro name="jetank_ros2_control" params="use_sim:=true">
+
+    <ros2_control name="JetankSystem" type="system">
+
+      <!-- Hardware selection based on simulation flag -->
+      <xacro:if value="${use_sim}">
+        <hardware>
+          <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+        </hardware>
+      </xacro:if>
+
+      <xacro:unless value="${use_sim}">
+        <hardware>
+          <plugin>jetank_motor_control/JetankSerialHardware</plugin>
+          <param name="serial_port">/dev/ttyTHS1</param>
+          <param name="baud_rate">1000000</param>
+        </hardware>
+      </xacro:unless>
+
+      <!-- ARM JOINTS (S1-S5) -->
+
+      <joint name="S1_joint">
+        <command_interface name="position">
+          <param name="min">-2.35</param>
+          <param name="max">2.35</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <param name="servo_id">1</param>
+      </joint>
+
+      <joint name="S2_joint">
+        <command_interface name="position">
+          <param name="min">-1.57</param>
+          <param name="max">1.57</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <param name="servo_id">2</param>
+      </joint>
+
+      <joint name="S3_joint">
+        <command_interface name="position">
+          <param name="min">-1.57</param>
+          <param name="max">1.57</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <param name="servo_id">3</param>
+      </joint>
+
+      <joint name="S4_joint">
+        <command_interface name="position">
+          <param name="min">-1.57</param>
+          <param name="max">1.57</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <param name="servo_id">4</param>
+      </joint>
+
+      <joint name="S5_joint">
+        <command_interface name="position">
+          <param name="min">-1.57</param>
+          <param name="max">1.57</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <param name="servo_id">5</param>
+      </joint>
+
+      <!-- GRIPPER JOINTS -->
+
+      <joint name="gripper_left_joint">
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">0.04</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="gripper_right_joint">
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">0.04</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+    </ros2_control>
+
+    <!-- Gazebo ros2_control plugin -->
+    <xacro:if value="${use_sim}">
+      <gazebo>
+        <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+          <parameters>$(find jetank_motor_control)/config/jetank_motor_controllers.yaml</parameters>
+        </plugin>
+      </gazebo>
+
+      <!-- Gazebo joint physics -->
+      <gazebo reference="S1_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+        <provideFeedback>true</provideFeedback>
+      </gazebo>
+      <gazebo reference="S2_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+        <provideFeedback>true</provideFeedback>
+      </gazebo>
+      <gazebo reference="S3_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+        <provideFeedback>true</provideFeedback>
+      </gazebo>
+      <gazebo reference="S4_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+        <provideFeedback>true</provideFeedback>
+      </gazebo>
+      <gazebo reference="S5_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+        <provideFeedback>true</provideFeedback>
+      </gazebo>
+      <gazebo reference="gripper_left_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+      </gazebo>
+      <gazebo reference="gripper_right_joint">
+        <implicitSpringDamper>true</implicitSpringDamper>
+      </gazebo>
+    </xacro:if>
+
+  </xacro:macro>
+
+</robot>

@@ -1,0 +1,10 @@
+<library path="jetank_control">
+  <class name="jetank_control/JetankSerialHardware"
+         type="jetank_control::JetankSerialHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware interface for JeTank ST/SC serial bus servos.
+      Communicates via UART at 1Mbps with daisy-chained servos.
+    </description>
+  </class>
+</library>

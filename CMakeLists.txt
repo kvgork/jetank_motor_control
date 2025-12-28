@@ -60,6 +60,14 @@ install(TARGETS robot_controller
 install(DIRECTORY include/
   DESTINATION include/)
 
+# Install config files
+install(DIRECTORY config launch
+  DESTINATION share/${PROJECT_NAME})
+
+# Install hardware interface plugin description
+install(FILES jetank_hardware.xml
+  DESTINATION share/${PROJECT_NAME})
+
 target_include_directories(robot_controller PRIVATE ${GPIOD_INCLUDE_DIRS})
 target_link_libraries(robot_controller ${GPIOD_LIBRARIES})
 
