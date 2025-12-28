@@ -21,7 +21,7 @@
       <!-- Hardware selection based on simulation flag -->
       <xacro:if value="${use_sim}">
         <hardware>
-          <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+          <plugin>ign_ros2_control/IgnitionSystem</plugin>
         </hardware>
       </xacro:if>
 
@@ -150,8 +150,8 @@
     <!-- Gazebo ros2_control plugin -->
     <xacro:if value="${use_sim}">
       <gazebo>
-        <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
-          <parameters>$(find jetank_motor_control)/config/jetank_motor_controllers.yaml</parameters>
+        <plugin filename="libign_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+          <parameters>$(find jetank_motor_control)/config/jetank_controllers.yaml</parameters>
         </plugin>
       </gazebo>
 
