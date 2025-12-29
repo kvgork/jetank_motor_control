@@ -21,7 +21,7 @@
       <!-- Hardware selection based on simulation flag -->
       <xacro:if value="${use_sim}">
         <hardware>
-          <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+          <plugin>ign_ros2_control/IgnitionSystem</plugin>
         </hardware>
       </xacro:if>
 
@@ -105,13 +105,53 @@
         <state_interface name="velocity"/>
       </joint>
 
+      <!-- WHEEL JOINTS (Simulation only - hardware uses robot_controller.cpp) -->
+      <!-- Differential drive base with 4 wheels -->
+      <!-- Max velocity ±5.0 rad/s = ±0.15 m/s at wheel (0.03m radius) -->
+
+      <joint name="front_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-5.0</param>
+          <param name="max">5.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="front_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-5.0</param>
+          <param name="max">5.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="rear_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-5.0</param>
+          <param name="max">5.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="rear_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-5.0</param>
+          <param name="max">5.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
     </ros2_control>
 
     <!-- Gazebo ros2_control plugin -->
     <xacro:if value="${use_sim}">
       <gazebo>
-        <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
-          <parameters>$(find jetank_motor_control)/config/jetank_motor_controllers.yaml</parameters>
+        <plugin filename="libign_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+          <parameters>$(find jetank_motor_control)/config/jetank_controllers.yaml</parameters>
         </plugin>
       </gazebo>
 

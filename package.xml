@@ -33,6 +33,7 @@
   <depend>joint_trajectory_controller</depend>
   <depend>position_controllers</depend>
   <depend>joint_state_broadcaster</depend>
+  <depend>diff_drive_controller</depend>
 
   <!-- Gazebo simulation -->
   <depend>gazebo_ros2_control</depend>
