@@ -65,6 +65,8 @@
         <param name="servo_id">3</param>
       </joint>
 
+      <!-- S4_joint disabled - Servo 4 controls gripper instead -->
+      <!--
       <joint name="S4_joint">
         <command_interface name="position">
           <param name="min">-1.57</param>
@@ -74,6 +76,7 @@
         <state_interface name="velocity"/>
         <param name="servo_id">4</param>
       </joint>
+      -->
 
       <joint name="S5_joint">
         <command_interface name="position">
@@ -86,6 +89,7 @@
       </joint>
 
       <!-- GRIPPER JOINTS -->
+      <!-- Gripper controlled by Servo 4 -->
 
       <joint name="gripper_left_joint">
         <command_interface name="position">
@@ -94,8 +98,10 @@
         </command_interface>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
+        <param name="servo_id">4</param>
       </joint>
 
+      <!-- gripper_right_joint is mimic of left in URDF, no direct control -->
       <joint name="gripper_right_joint">
         <command_interface name="position">
           <param name="min">0.0</param>

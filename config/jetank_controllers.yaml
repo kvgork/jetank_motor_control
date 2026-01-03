@@ -23,7 +23,7 @@ controller_manager:
 
 
 # ============================================
-# ARM CONTROLLER (5-DOF)
+# ARM CONTROLLER (4-DOF: S1, S2, S3, S5)
 # ============================================
 arm_controller:
   ros__parameters:
@@ -31,8 +31,7 @@ arm_controller:
       - S1_joint
       - S2_joint
       - S3_joint
-      - S4_joint
-      - S5_joint
+      - S5_joint  # S4 removed - servo 4 controls gripper
 
     command_interfaces:
       - position
@@ -59,9 +58,6 @@ arm_controller:
         trajectory: 0.1
         goal: 0.05
       S3_joint:
-        trajectory: 0.1
-        goal: 0.05
-      S4_joint:
         trajectory: 0.1
         goal: 0.05
       S5_joint:
