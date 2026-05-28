@@ -3,9 +3,9 @@
 <package format="3">
   <name>jetank_motor_control</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Motor control and ros2_control hardware interface for the JeTank robot</description>
   <maintainer email="gorkom.projects@gmail.com">koen</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
