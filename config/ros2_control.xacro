@@ -14,11 +14,16 @@
        Note: Exact mapping depends on hardware configuration
   -->
 
-  <xacro:macro name="jetank_ros2_control" params="use_sim:=true">
+  <!-- hardware: mock | serial  (only consulted when use_sim is false)
+       use_sim=true always selects the Gazebo/Ignition plugin. -->
+  <xacro:macro name="jetank_ros2_control" params="use_sim:=true hardware:='mock'">
 
     <ros2_control name="JetankSystem" type="system">
 
-      <!-- Hardware selection based on simulation flag -->
+      <!-- Hardware selection:
+           use_sim=true            -> Gazebo (Ignition) system
+           use_sim=false, serial   -> real Waveshare serial-bus servos
+           use_sim=false, mock     -> mock_components (software-only, no HW) -->
       <xacro:if value="${use_sim}">
         <hardware>
           <plugin>ign_ros2_control/IgnitionSystem</plugin>
@@ -26,11 +31,18 @@
       </xacro:if>
 
       <xacro:unless value="${use_sim}">
-        <hardware>
-          <plugin>jetank_motor_control/JetankSerialHardware</plugin>
-          <param name="serial_port">/dev/ttyTHS1</param>
-          <param name="baud_rate">1000000</param>
-        </hardware>
+        <xacro:if value="${hardware == 'serial'}">
+          <hardware>
+            <plugin>jetank_motor_control/JetankSerialHardware</plugin>
+            <param name="serial_port">/dev/ttyTHS1</param>
+            <param name="baud_rate">1000000</param>
+          </hardware>
+        </xacro:if>
+        <xacro:unless value="${hardware == 'serial'}">
+          <hardware>
+            <plugin>mock_components/GenericSystem</plugin>
+          </hardware>
+        </xacro:unless>
       </xacro:unless>
 
       <!-- ARM JOINTS (S1-S5) -->
@@ -101,15 +113,10 @@
         <param name="servo_id">4</param>
       </joint>
 
-      <!-- gripper_right_joint is mimic of left in URDF, no direct control -->
-      <joint name="gripper_right_joint">
-        <command_interface name="position">
-          <param name="min">0.0</param>
-          <param name="max">0.04</param>
-        </command_interface>
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
+      <!-- gripper_right_joint is a <mimic> of gripper_left_joint in the URDF.
+           ros2_control forbids command interfaces on mimic joints; both the
+           mock and Ignition systems mirror it automatically from the URDF
+           mimic tag, so it is intentionally NOT declared here. -->
 
       <!-- WHEEL JOINTS (Simulation only - hardware uses robot_controller.cpp) -->
       <!-- Differential drive base with 4 wheels -->

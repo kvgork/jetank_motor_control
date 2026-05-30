@@ -70,9 +70,10 @@ arm_controller:
 # ============================================
 gripper_controller:
   ros__parameters:
+    # Only the left finger is commanded; gripper_right_joint is a URDF mimic
+    # and has no command interface (the hardware system mirrors it).
     joints:
       - gripper_left_joint
-      - gripper_right_joint
 
     command_interfaces:
       - position
