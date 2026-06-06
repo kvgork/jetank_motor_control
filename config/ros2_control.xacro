@@ -92,12 +92,19 @@
       <!-- Gripper controlled by Servo 4: only the left finger is commanded
            directly (JointGroupPositionController, one joint).
            gripper_right_joint is a URDF mimic of gripper_left_joint
-           (multiplier=1.0) — Gazebo Fortress enforces the mimic constraint
-           in physics, so the right finger follows the left automatically.
-           Giving gripper_right_joint a command_interface would create a
-           conflict between the controller setpoint and the physics mimic,
-           preventing the left finger from moving.  State interfaces remain
-           so joint_state_broadcaster can still publish both positions. -->
+           (multiplier=1.0), state-only here (no command interface).
+
+           REAL HARDWARE: one servo drives a mechanically-linked parallel jaw,
+           so commanding the single left joint is correct — the linkage moves
+           both fingers physically.
+
+           SIM CAVEAT (Gazebo Fortress / ign_ros2_control): the URDF <mimic>
+           tag is NOT reliably enforced in Fortress physics. The control path
+           is wired correctly (controller active, command accepted, state
+           published) but the left finger may not visibly actuate in sim.
+           Known limitation — tracked in the Phase A notes; arm motion (the
+           Phase A core goal) is fully functional. -->
+
 
       <joint name="gripper_left_joint">
         <command_interface name="position">
