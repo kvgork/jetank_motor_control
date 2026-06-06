@@ -15,10 +15,18 @@ controller_manager:
 
     # Gripper Controller - GripperActionController exposes
     # /gripper_controller/gripper_cmd (control_msgs/action/GripperCommand).
-    # Drives gripper_left_joint; gripper_right_joint is mirrored via the
-    # ros2_control native mimic mechanism (param name="mimic" in ros2_control.xacro).
+    # Drives gripper_left_joint only.
     gripper_controller:
       type: position_controllers/GripperActionController
+
+    # Gripper right mimic controller - ForwardCommandController that receives
+    # position commands from the gripper_mimic_relay node, which reads
+    # gripper_left_joint state from /joint_states and forwards it here so that
+    # Gazebo physically moves the right finger in sync with the left.
+    # This is the sim-only mechanism for bilateral finger actuation.
+    # On real hardware the jaw is mechanically linked; this controller is not spawned.
+    gripper_right_mimic_controller:
+      type: forward_command_controller/ForwardCommandController
 
     # Diff Drive Controller - Mobile base control (simulation only)
     diff_drive_controller:
@@ -73,8 +81,8 @@ arm_controller:
 # ============================================
 # position_controllers/GripperActionController drives gripper_left_joint via a
 # control_msgs/action/GripperCommand action at /gripper_controller/gripper_cmd.
-# gripper_right_joint is mirrored automatically by the ros2_control resource
-# manager's native mimic mechanism declared in ros2_control.xacro.
+# gripper_right_joint is actuated separately by gripper_right_mimic_controller
+# (driven by gripper_mimic_relay node) so both fingers move physically in Gazebo.
 gripper_controller:
   ros__parameters:
     joint: gripper_left_joint
@@ -90,6 +98,18 @@ gripper_controller:
 
     # Goal tolerance on position (prismatic, metres)
     goal_tolerance: 0.005  # 5 mm
+
+
+# ============================================
+# GRIPPER RIGHT MIMIC CONTROLLER
+# ============================================
+# ForwardCommandController receiving position commands from gripper_mimic_relay.
+# Sim-only: not spawned in real-hardware bringup.
+gripper_right_mimic_controller:
+  ros__parameters:
+    joints:
+      - gripper_right_joint
+    interface_name: position
 
 
 # ============================================
