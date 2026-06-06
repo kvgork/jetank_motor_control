@@ -89,7 +89,15 @@
       </joint>
 
       <!-- GRIPPER JOINTS -->
-      <!-- Gripper controlled by Servo 4 -->
+      <!-- Gripper controlled by Servo 4: only the left finger is commanded
+           directly (JointGroupPositionController, one joint).
+           gripper_right_joint is a URDF mimic of gripper_left_joint
+           (multiplier=1.0) — Gazebo Fortress enforces the mimic constraint
+           in physics, so the right finger follows the left automatically.
+           Giving gripper_right_joint a command_interface would create a
+           conflict between the controller setpoint and the physics mimic,
+           preventing the left finger from moving.  State interfaces remain
+           so joint_state_broadcaster can still publish both positions. -->
 
       <joint name="gripper_left_joint">
         <command_interface name="position">
@@ -101,12 +109,8 @@
         <param name="servo_id">4</param>
       </joint>
 
-      <!-- gripper_right_joint is mimic of left in URDF, no direct control -->
+      <!-- gripper_right_joint: mimic joint — state only, no command interface. -->
       <joint name="gripper_right_joint">
-        <command_interface name="position">
-          <param name="min">0.0</param>
-          <param name="max">0.04</param>
-        </command_interface>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
       </joint>

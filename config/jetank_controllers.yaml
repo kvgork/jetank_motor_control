@@ -68,11 +68,15 @@ arm_controller:
 # ============================================
 # GRIPPER CONTROLLER
 # ============================================
+# Only gripper_left_joint is commanded directly; gripper_right_joint is a
+# mimic joint (multiplier=1.0) declared in the URDF — Gazebo's physics engine
+# enforces the mimic constraint automatically.  Commanding both joints via the
+# position controller creates a conflict between the controller setpoint and the
+# physics mimic constraint, which prevents the left finger from moving.
 gripper_controller:
   ros__parameters:
     joints:
       - gripper_left_joint
-      - gripper_right_joint
 
     command_interfaces:
       - position
