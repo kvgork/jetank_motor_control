@@ -89,22 +89,19 @@
       </joint>
 
       <!-- GRIPPER JOINTS -->
-      <!-- Gripper controlled by Servo 4: only the left finger is commanded
-           directly (JointGroupPositionController, one joint).
-           gripper_right_joint is a URDF mimic of gripper_left_joint
-           (multiplier=1.0), state-only here (no command interface).
+      <!-- gripper_left_joint is the COMMANDED joint (GripperActionController).
+           gripper_right_joint is mimic-only — no command interface.
 
-           REAL HARDWARE: one servo drives a mechanically-linked parallel jaw,
-           so commanding the single left joint is correct — the linkage moves
-           both fingers physically.
+           The ros2_control resource manager's native mimic mechanism is used
+           (param name="mimic" + param name="multiplier") so that Gazebo
+           Fortress's ign_ros2_control properly mirrors the right finger to the
+           left.  The URDF <mimic> tag alone is NOT reliably enforced by Fortress
+           physics; the ros2_control params are the documented gz_ros2_control
+           pattern and work with GripperActionController.
 
-           SIM CAVEAT (Gazebo Fortress / ign_ros2_control): the URDF <mimic>
-           tag is NOT reliably enforced in Fortress physics. The control path
-           is wired correctly (controller active, command accepted, state
-           published) but the left finger may not visibly actuate in sim.
-           Known limitation — tracked in the Phase A notes; arm motion (the
-           Phase A core goal) is fully functional. -->
-
+           REAL HARDWARE: one servo (ID 4) drives a mechanically-linked parallel
+           jaw, so commanding gripper_left_joint is correct — the linkage moves
+           both fingers physically. -->
 
       <joint name="gripper_left_joint">
         <command_interface name="position">
@@ -116,10 +113,13 @@
         <param name="servo_id">4</param>
       </joint>
 
-      <!-- gripper_right_joint: mimic joint — state only, no command interface. -->
+      <!-- gripper_right_joint: mimic joint — state only, no command interface.
+           ros2_control native mimic: resource manager mirrors left -> right. -->
       <joint name="gripper_right_joint">
         <state_interface name="position"/>
         <state_interface name="velocity"/>
+        <param name="mimic">gripper_left_joint</param>
+        <param name="multiplier">1.0</param>
       </joint>
 
       <!-- WHEEL JOINTS (Simulation only - hardware uses robot_controller.cpp) -->

@@ -13,9 +13,12 @@ controller_manager:
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-    # Gripper Controller - Position controller for parallel gripper
+    # Gripper Controller - GripperActionController exposes
+    # /gripper_controller/gripper_cmd (control_msgs/action/GripperCommand).
+    # Drives gripper_left_joint; gripper_right_joint is mirrored via the
+    # ros2_control native mimic mechanism (param name="mimic" in ros2_control.xacro).
     gripper_controller:
-      type: position_controllers/JointGroupPositionController
+      type: position_controllers/GripperActionController
 
     # Diff Drive Controller - Mobile base control (simulation only)
     diff_drive_controller:
@@ -66,27 +69,27 @@ arm_controller:
 
 
 # ============================================
-# GRIPPER CONTROLLER
+# GRIPPER CONTROLLER (GripperActionController)
 # ============================================
-# Only gripper_left_joint is commanded directly; gripper_right_joint is a
-# mimic joint (multiplier=1.0) declared in the URDF — Gazebo's physics engine
-# enforces the mimic constraint automatically.  Commanding both joints via the
-# position controller creates a conflict between the controller setpoint and the
-# physics mimic constraint, which prevents the left finger from moving.
+# position_controllers/GripperActionController drives gripper_left_joint via a
+# control_msgs/action/GripperCommand action at /gripper_controller/gripper_cmd.
+# gripper_right_joint is mirrored automatically by the ros2_control resource
+# manager's native mimic mechanism declared in ros2_control.xacro.
 gripper_controller:
   ros__parameters:
-    joints:
-      - gripper_left_joint
+    joint: gripper_left_joint
 
-    command_interfaces:
-      - position
+    # Maximum effort the controller will apply (matches URDF effort limit 5 N)
+    max_effort: 5.0
 
-    state_interfaces:
-      - position
-      - velocity
+    # Stall detection: allow_stalling=true prevents the action from aborting when
+    # the finger hits an object (stall = success for a gripper).
+    allow_stalling: true
+    stall_velocity_threshold: 0.0001  # m/s — below this counts as stalled
+    stall_timeout: 10.0               # s — how long to wait before declaring stall
 
-    # Interface names for sending commands
-    interface_name: position
+    # Goal tolerance on position (prismatic, metres)
+    goal_tolerance: 0.005  # 5 mm
 
 
 # ============================================
