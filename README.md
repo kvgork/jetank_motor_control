@@ -55,7 +55,7 @@ Exported via `jetank_hardware.xml` for real hardware:
 
 - **Plugin class:** `jetank_motor_control/JetankSerialHardware` (base `hardware_interface::SystemInterface`) — JeTank ST/SC serial-bus servos over UART. Selected in `config/ros2_control.xacro` when `use_sim:=false` (params `serial_port=/dev/ttyTHS1`, `baud_rate=1000000`). In sim (`use_sim:=true`) the `ign_ros2_control/IgnitionSystem` plugin is used instead.
 
-  > Note: the plugin library `path="jetank_control"` is declared in `jetank_hardware.xml` but `CMakeLists.txt` builds no such library and does not register the pluginlib export — the interface is currently declared for future hardware, not yet compiled.
+  > Note: this is a **stub** — `jetank_hardware.xml` declares the class (namespace consistent with `config/ros2_control.xacro`), but there is no C++ implementation yet and `CMakeLists.txt` neither builds the library nor calls `pluginlib_export_plugin_description_file`. The real robot currently drives via the `robot_controller` node, not this interface. See the comment in `jetank_hardware.xml` for how to enable it.
 
 ### Controllers configured (`config/jetank_controllers.yaml`)
 
