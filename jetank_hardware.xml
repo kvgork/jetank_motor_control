@@ -1,6 +1,22 @@
-<library path="jetank_control">
-  <class name="jetank_control/JetankSerialHardware"
-         type="jetank_control::JetankSerialHardware"
+<!--
+  pluginlib description for the real-hardware ros2_control SystemInterface.
+
+  STATUS: stub / not yet implemented. The class below is referenced by
+  config/ros2_control.xacro (the <xacro:unless use_sim> branch uses
+  <plugin>jetank_motor_control/JetankSerialHardware</plugin>), but there is no
+  C++ implementation yet (src/ only builds the diff-drive `robot_controller`
+  node + `jetank_motor_lib`). The real robot currently drives via that node, not
+  via a ros2_control hardware interface.
+
+  To enable this plugin: add the JetankSerialHardware source + a shared library
+  target in CMakeLists.txt, PLUGINLIB_EXPORT_CLASS it, and register this file
+  with `pluginlib_export_plugin_description_file(hardware_interface
+  jetank_hardware.xml)`. The class name here is kept consistent with the xacro
+  reference (`jetank_motor_control` namespace) so no rename is needed then.
+-->
+<library path="jetank_motor_control">
+  <class name="jetank_motor_control/JetankSerialHardware"
+         type="jetank_motor_control::JetankSerialHardware"
          base_class_type="hardware_interface::SystemInterface">
     <description>
       Hardware interface for JeTank ST/SC serial bus servos.

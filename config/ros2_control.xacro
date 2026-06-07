@@ -48,7 +48,7 @@
       <joint name="S2_joint">
         <command_interface name="position">
           <param name="min">-1.57</param>
-          <param name="max">1.57</param>
+          <param name="max">2.356</param>
         </command_interface>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
@@ -57,8 +57,8 @@
 
       <joint name="S3_joint">
         <command_interface name="position">
-          <param name="min">-1.57</param>
-          <param name="max">1.57</param>
+          <param name="min">-2.356</param>
+          <param name="max">2.356</param>
         </command_interface>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
@@ -89,7 +89,30 @@
       </joint>
 
       <!-- GRIPPER JOINTS -->
-      <!-- Gripper controlled by Servo 4 -->
+      <!-- gripper_left_joint: commanded by GripperActionController.
+           gripper_right_joint: has its OWN command interface (position) so Gazebo
+           enforces physical motion of the right finger independently.  A small
+           "gripper mimic relay" node (gripper_mimic_relay in
+           jetank_motor_control) subscribes to /joint_states and forwards the
+           gripper_left_joint position to the gripper_right_mimic_controller
+           (ForwardCommandController).  This makes BOTH fingers move in physics
+           and appear correctly in /joint_states.
+
+           The URDF <mimic> tag (restored in gripper.xacro) is kept for:
+             - robot_state_publisher TF computation when the relay is absent
+             - MoveIt joint model correctness
+             - RViz rendering fallback
+
+           The ros2_control NATIVE mimic params (<param name="mimic">/
+           <param name="multiplier">) are intentionally OMITTED because the gz
+           hardware plugin appends "_mimic" to the published state interface name,
+           producing "gripper_right_joint_mimic" in /joint_states — killing the
+           MoveIt joint-not-found spam required removing them.
+
+           REAL HARDWARE: one servo (ID 4) drives a mechanically-linked jaw; only
+           gripper_left_joint is commanding the servo; gripper_right_joint on
+           real hw has no servo and should not issue a command. The relay node
+           guards against this via use_sim_time check or a launch-time arg. -->
 
       <joint name="gripper_left_joint">
         <command_interface name="position">
@@ -101,7 +124,9 @@
         <param name="servo_id">4</param>
       </joint>
 
-      <!-- gripper_right_joint is mimic of left in URDF, no direct control -->
+      <!-- gripper_right_joint: own command interface so Gazebo can physically
+           move the right finger (driven by the mimic relay node). No native
+           ros2_control mimic params — avoids the _mimic suffix in JSB output. -->
       <joint name="gripper_right_joint">
         <command_interface name="position">
           <param name="min">0.0</param>
