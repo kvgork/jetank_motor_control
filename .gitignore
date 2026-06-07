@@ -30,3 +30,4 @@ __pycache__/
 *.tmp
 *.bak
 *~
+.pytest_cache/

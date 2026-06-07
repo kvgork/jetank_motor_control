@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""DEPRECATED — Gazebo Classic launch for JeTank.
+"""
+DEPRECATED — Gazebo Classic launch for JeTank.
 
 This workspace standardised on Gazebo Fortress (Ignition) via ros_gz and
 ign_ros2_control. The RoboStack pixi environment does not ship Gazebo Classic
