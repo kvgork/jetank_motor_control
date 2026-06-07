@@ -37,7 +37,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(robot_controller 
+add_executable(robot_controller
   src/motor/robot_controller.cpp
   src/motor/motor.cpp)
 
@@ -49,8 +49,6 @@ ament_target_dependencies(robot_controller rclcpp geometry_msgs std_msgs)
 ament_target_dependencies(jetank_motor_lib rclcpp)
 
 include_directories(include)
-
-
 
 # Install
 install(TARGETS robot_controller
@@ -75,5 +73,13 @@ target_include_directories(jetank_motor_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_motor_header test/test_motor_header.cpp)
+  target_include_directories(test_motor_header PRIVATE include)
+  ament_target_dependencies(test_motor_header rclcpp)
+  target_link_libraries(test_motor_header jetank_motor_lib)
+endif()
 
 ament_package()

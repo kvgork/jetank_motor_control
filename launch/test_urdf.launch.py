@@ -5,7 +5,6 @@ Simple test launch file for JeTank URDF visualization.
 Tests URDF loading with robot_state_publisher and visualizes in RViz.
 """
 
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -72,7 +71,8 @@ def generate_launch_description():
         executable="rviz2",
         name="rviz2",
         output="screen",
-        arguments=["-d", PathJoinSubstitution([FindPackageShare("jetank_description"), "rviz", "urdf.rviz"])],
+        arguments=["-d", PathJoinSubstitution(
+            [FindPackageShare("jetank_description"), "rviz", "urdf.rviz"])],
     )
 
     return LaunchDescription(
