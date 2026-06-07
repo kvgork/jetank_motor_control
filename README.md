@@ -75,3 +75,18 @@ Exported via `jetank_hardware.xml` for real hardware:
 |---|---|
 | `launch/test_urdf.launch.py` | Loads `jetank_description` URDF (xacro `use_sim:=true use_ros2_control:=true`) into `robot_state_publisher` + `joint_state_publisher_gui` + RViz. Does **not** start `robot_controller` or `controller_manager`. |
 | `launch/gazebo_sim.launch.py` | **Deprecated** (Gazebo Classic). Emits a deprecation notice only; use `jetank_simulation` launches instead. |
+
+## Tests
+
+C++ gtest contract tests for the `Motor` driver header. `Motor` cannot be unit-instantiated (its constructor opens an I2C device), so the tests assert its public contract at compile time via `<type_traits>`, linking against the real `motor.cpp` through `jetank_motor_lib`.
+
+| File | Imports | Asserts |
+|---|---|---|
+| `test/test_motor_header.cpp` | `motor.hpp` (the `Motor` class) | `Motor` is **not** default-constructible (only ctor needs a logger + motor number); is **not** copy-constructible or copy-assignable (owns an `i2c_fd_`, held via `unique_ptr` — prevents double-close); the `Motor(rclcpp::Logger, int, double=1.0, double=0.0)` constructor signature stays callable with required and full arg lists; the `setValue(double)` / `stop()` public control surface keeps its member-pointer signatures. |
+
+Run (built + executed by colcon):
+
+```bash
+colcon test --packages-select jetank_motor_control
+colcon test-result --verbose
+```
