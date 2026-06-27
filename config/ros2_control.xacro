@@ -14,11 +14,18 @@
        Note: Exact mapping depends on hardware configuration
   -->
 
-  <xacro:macro name="jetank_ros2_control" params="use_sim:=true">
+  <xacro:macro name="jetank_ros2_control" params="use_sim:=true hardware:=mock">
 
     <ros2_control name="JetankSystem" type="system">
 
-      <!-- Hardware selection based on simulation flag -->
+      <!-- Hardware backend selection (3-way):
+             use_sim:=true            -> Gazebo IgnitionSystem (sim)
+             use_sim:=false hardware=mock   -> mock_components/GenericSystem
+                                               (software-only, NO motors move)
+             use_sim:=false hardware=serial -> JetankSerialHardware (real servos)
+           The mock branch is what makes `hardware:=mock` SAFE: previously the
+           xacro only knew use_sim, so a non-sim build always emitted the serial
+           plugin and `hardware:=mock` silently drove real motors. -->
       <xacro:if value="${use_sim}">
         <hardware>
           <plugin>ign_ros2_control/IgnitionSystem</plugin>
@@ -26,11 +33,18 @@
       </xacro:if>
 
       <xacro:unless value="${use_sim}">
-        <hardware>
-          <plugin>jetank_motor_control/JetankSerialHardware</plugin>
-          <param name="serial_port">/dev/ttyTHS1</param>
-          <param name="baud_rate">1000000</param>
-        </hardware>
+        <xacro:if value="${hardware == 'mock'}">
+          <hardware>
+            <plugin>mock_components/GenericSystem</plugin>
+          </hardware>
+        </xacro:if>
+        <xacro:unless value="${hardware == 'mock'}">
+          <hardware>
+            <plugin>jetank_motor_control/JetankSerialHardware</plugin>
+            <param name="serial_port">/dev/ttyTHS1</param>
+            <param name="baud_rate">1000000</param>
+          </hardware>
+        </xacro:unless>
       </xacro:unless>
 
       <!-- ARM JOINTS (S1-S5) -->
