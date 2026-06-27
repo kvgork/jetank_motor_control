@@ -8,7 +8,7 @@
 namespace jetank_motor_control
 {
 
-/// Minimal Feetech serial bus servo protocol (SMS/STS family) over a POSIX
+/// Minimal Feetech serial bus servo protocol (SCS / SCSCL family) over a POSIX
 /// termios serial port. No external SDK dependency.
 ///
 /// Protocol summary (half-duplex UART, default 1 Mbps):
@@ -17,13 +17,15 @@ namespace jetank_motor_control
 ///   LEN      = number of params + 2
 ///   CHECKSUM = ~(ID + LEN + INST + sum(params)) & 0xFF
 ///
-/// Register map / encoding assumes the SMS_STS family (e.g. STS3215):
-///   - positions/speeds are 16-bit little-endian
-///   - position range 0..4095 over 0..360 deg
+/// Register map / encoding for the SCS family (JeTank arm = 4x SCS15-AP + 1x
+/// SCS15-S), VERIFIED on hardware 2026-06-27:
+///   - positions are 16-bit BIG-endian (high byte first) — NOT little-endian
+///     like the SMS/STS family. Decoding LE gives nonsense >1023 values.
+///   - position range 0..1023 (10-bit) over ~300 deg, center 512.
 ///
-/// IMPORTANT: confirm the register map + endianness against the actual servos
-/// (via the hardware-test MCP feetech tools) before enabling torque on real
-/// hardware. The constants are isolated here so they are easy to adjust.
+/// This UART (Jetson /dev/ttyTHS1) reflects the TX bytes on the shared
+/// half-duplex line, so recv_packet strips the echo and frame-syncs on a valid
+/// status packet rather than trusting a fixed-offset read.
 class FeetechBus
 {
 public:
@@ -50,16 +52,19 @@ public:
   /// Read the present position (raw ticks). Returns false on timeout/error.
   bool read_present_position(uint8_t id, uint16_t & ticks);
 
-  /// SMS/STS control-table register addresses (memory map).
+  /// SCS / SCSCL control-table register addresses (memory map).
   enum Register : uint8_t
   {
     REG_TORQUE_ENABLE = 40,    // 0x28
-    REG_GOAL_POSITION = 42,    // 0x2A (2 bytes, LE)
-    REG_PRESENT_POSITION = 56  // 0x38 (2 bytes, LE)
+    REG_GOAL_POSITION = 42,    // 0x2A (2 bytes, BIG-endian on SCS)
+    REG_PRESENT_POSITION = 56  // 0x38 (2 bytes, BIG-endian on SCS)
   };
 
-  static constexpr uint16_t TICKS_PER_REV = 4096;  // 0..4095 over 360 deg
-  static constexpr uint16_t CENTER_TICKS = 2048;   // tick at 0 rad (default)
+  // SCS15: 10-bit position, 0..1023 over ~300 deg, center 512.
+  static constexpr uint16_t POSITION_FULLSCALE = 1024;  // 0..1023 usable
+  static constexpr uint16_t POSITION_MAX = 1023;
+  static constexpr uint16_t CENTER_TICKS = 512;         // tick at 0 rad (default)
+  static constexpr double SPAN_DEGREES = 300.0;         // SCS15 angular span
 
 private:
   enum Instruction : uint8_t
@@ -82,6 +87,9 @@ private:
   int read_bytes(uint8_t * buf, int n, int timeout_ms);
 
   int fd_ = -1;
+  /// Last instruction packet sent, used to strip the TX echo that this UART
+  /// reflects on the shared half-duplex line before the servo's reply.
+  std::vector<uint8_t> last_tx_;
 };
 
 }  // namespace jetank_motor_control

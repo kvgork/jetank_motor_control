@@ -54,9 +54,12 @@ private:
   {
     std::string name;
     uint8_t id = 0;
-    double offset_ticks = FeetechBus::CENTER_TICKS;  // tick at 0 rad
+    double offset_ticks = FeetechBus::CENTER_TICKS;  // tick at 0 rad (SCS15: 512)
     double direction = 1.0;                           // +1 or -1
-    double ticks_per_rad = FeetechBus::TICKS_PER_REV / (2.0 * 3.14159265358979323846);
+    // SCS15: 1024 counts over ~300 deg -> counts per radian.
+    double ticks_per_rad =
+      FeetechBus::POSITION_FULLSCALE /
+      (FeetechBus::SPAN_DEGREES * 3.14159265358979323846 / 180.0);
     double prev_position = 0.0;                        // for finite-diff velocity
     bool prev_valid = false;
   };

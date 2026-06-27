@@ -234,7 +234,7 @@ hardware_interface::return_type JetankSerialHardware::write(
       continue;  // no valid position command yet
     }
     double ticks = rad_to_ticks(sj, c->second);
-    ticks = std::clamp(ticks, 0.0, static_cast<double>(FeetechBus::TICKS_PER_REV - 1));
+    ticks = std::clamp(ticks, 0.0, static_cast<double>(FeetechBus::POSITION_MAX));
     bus_.write_goal_position(sj.id, static_cast<uint16_t>(std::lround(ticks)));
   }
   return hardware_interface::return_type::OK;

@@ -1,0 +1,42 @@
+# Per-controller parameter file for the STANDALONE controller_manager path
+# (moveit_bringup.launch.py, hardware/mock — NOT the gz_ros2_control sim path).
+#
+# controller_manager 2.54 loads a controller's `params_file` into the controller
+# NODE, where rclcpp only matches a bare `/**` wildcard key — NOT the controller
+# name (`arm_controller:`) nor `/arm_controller:` nor `/**/arm_controller:`
+# (all verified to fail on this build). Hence the bare `/**` wildcard here, in a
+# file dedicated to this one controller so no params leak to other controllers.
+#
+# Keep in sync with the `arm_controller:` section of jetank_controllers.yaml
+# (which still serves the controller_manager section + the gz sim path).
+/**:
+  ros__parameters:
+    joints:
+      - S1_joint
+      - S2_joint
+      - S3_joint
+      - S5_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    state_publish_rate: 50.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    open_loop_control: false
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.0
+      S1_joint:
+        trajectory: 0.1
+        goal: 0.05
+      S2_joint:
+        trajectory: 0.1
+        goal: 0.05
+      S3_joint:
+        trajectory: 0.1
+        goal: 0.05
+      S5_joint:
+        trajectory: 0.1
+        goal: 0.05

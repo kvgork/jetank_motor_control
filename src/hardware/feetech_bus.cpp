@@ -127,6 +127,7 @@ bool FeetechBus::send_packet(
   packet.push_back(static_cast<uint8_t>(~sum & 0xFF));
 
   tcflush(fd_, TCIFLUSH);  // drop any stale bytes before a fresh transaction
+  last_tx_ = packet;       // remembered so recv_packet can strip the TX echo
   const ssize_t written = ::write(fd_, packet.data(), packet.size());
   return written == static_cast<ssize_t>(packet.size());
 }
@@ -134,33 +135,60 @@ bool FeetechBus::send_packet(
 bool FeetechBus::recv_packet(
   uint8_t expected_id, std::vector<uint8_t> & params, uint8_t expected_param_len)
 {
-  // Status packet: 0xFF 0xFF ID LEN ERR PARAMS... CHECKSUM
-  // LEN = param_len + 2 (ERR + CHECKSUM).
-  const int total = expected_param_len + 6;
-  std::vector<uint8_t> buf(total);
-  const int got = read_bytes(buf.data(), total, 50 /*ms*/);
-  if (got < total) {
+  if (fd_ < 0) {
     return false;
   }
-  if (buf[0] != 0xFF || buf[1] != 0xFF || buf[2] != expected_id) {
-    return false;
-  }
-  const uint8_t length = buf[3];
-  if (length != expected_param_len + 2) {
-    return false;
-  }
+  // Status packet: 0xFF 0xFF ID LEN ERR PARAMS... CHECKSUM ; LEN = param_len + 2.
+  const size_t status_len = static_cast<size_t>(expected_param_len) + 6;
 
-  uint32_t sum = buf[2] + buf[3] + buf[4];  // ID + LEN + ERR
-  for (uint8_t i = 0; i < expected_param_len; ++i) {
-    sum += buf[5 + i];
-  }
-  const uint8_t checksum = buf[5 + expected_param_len];
-  if (checksum != static_cast<uint8_t>(~sum & 0xFF)) {
-    return false;
-  }
+  // This half-duplex UART reflects our TX, so the reply may be preceded by an
+  // echo of last_tx_. Accumulate bytes with a deadline and parse incrementally,
+  // returning as soon as a valid status frame is found (so a present reply does
+  // not pay the full timeout). The echo is a valid instruction packet with the
+  // same id, so we skip a leading copy of last_tx_ before scanning.
+  std::vector<uint8_t> buf;
+  buf.reserve(status_len + last_tx_.size() + 8);
 
-  params.assign(buf.begin() + 5, buf.begin() + 5 + expected_param_len);
-  return true;
+  for (int waited = 0; waited < 60; ) {        // ~12 ms ceiling (60 * 0.2 ms)
+    uint8_t tmp[64];
+    const ssize_t r = ::read(fd_, tmp, sizeof(tmp));
+    if (r > 0) {
+      buf.insert(buf.end(), tmp, tmp + r);
+
+      // Skip a leading TX echo if present.
+      size_t start = 0;
+      if (buf.size() >= last_tx_.size() &&
+        std::equal(last_tx_.begin(), last_tx_.end(), buf.begin()))
+      {
+        start = last_tx_.size();
+      }
+
+      // Frame-sync: scan for FF FF <id> <len> with a matching checksum.
+      for (size_t i = start; i + status_len <= buf.size(); ++i) {
+        if (buf[i] != 0xFF || buf[i + 1] != 0xFF || buf[i + 2] != expected_id) {
+          continue;
+        }
+        if (buf[i + 3] != expected_param_len + 2) {
+          continue;
+        }
+        uint32_t sum = buf[i + 2] + buf[i + 3] + buf[i + 4];  // ID + LEN + ERR
+        for (uint8_t k = 0; k < expected_param_len; ++k) {
+          sum += buf[i + 5 + k];
+        }
+        if (static_cast<uint8_t>(~sum & 0xFF) != buf[i + 5 + expected_param_len]) {
+          continue;
+        }
+        params.assign(buf.begin() + i + 5, buf.begin() + i + 5 + expected_param_len);
+        return true;
+      }
+    } else if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+      break;
+    } else {
+      usleep(200);
+      waited += 1;
+    }
+  }
+  return false;
 }
 
 bool FeetechBus::write_register(
@@ -207,9 +235,10 @@ bool FeetechBus::set_torque(uint8_t id, bool on)
 
 bool FeetechBus::write_goal_position(uint8_t id, uint16_t ticks)
 {
+  // SCS is BIG-endian: high byte first.
   const std::vector<uint8_t> data{
-    static_cast<uint8_t>(ticks & 0xFF),
-    static_cast<uint8_t>((ticks >> 8) & 0xFF)};
+    static_cast<uint8_t>((ticks >> 8) & 0xFF),
+    static_cast<uint8_t>(ticks & 0xFF)};
   return write_register(id, REG_GOAL_POSITION, data);
 }
 
@@ -219,7 +248,7 @@ bool FeetechBus::read_present_position(uint8_t id, uint16_t & ticks)
   if (!read_register(id, REG_PRESENT_POSITION, 2, out) || out.size() != 2) {
     return false;
   }
-  ticks = static_cast<uint16_t>(out[0] | (out[1] << 8));
+  ticks = static_cast<uint16_t>((out[0] << 8) | out[1]);  // SCS big-endian
   return true;
 }
 
