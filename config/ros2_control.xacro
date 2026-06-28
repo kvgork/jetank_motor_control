@@ -57,6 +57,12 @@
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <param name="servo_id">1</param>
+        <!-- Servo 1 turns opposite to the URDF/RViz convention. Invert in the
+             driver (NOT the URDF <axis>): the driver ignores URDF axis, and its
+             rad->tick write and tick->rad read are exact inverses, so flipping
+             direction reverses both commanded motion and reported state together,
+             keeping RViz consistent. Verified 2026-06-28 (arm-model audit). -->
+        <param name="direction">-1</param>
       </joint>
 
       <joint name="S2_joint">
@@ -77,6 +83,9 @@
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <param name="servo_id">3</param>
+        <!-- Servo 3 turns opposite to URDF/RViz; invert in the driver (see
+             S1_joint note above). Verified 2026-06-28 (arm-model audit). -->
+        <param name="direction">-1</param>
       </joint>
 
       <!-- S4_joint disabled - Servo 4 controls gripper instead -->
@@ -136,6 +145,19 @@
         <state_interface name="position"/>
         <state_interface name="velocity"/>
         <param name="servo_id">4</param>
+        <!-- PRISMATIC gripper jaw [0, 0.04 m]. The driver's generic linear map
+             ticks = offset + value*ticks_per_rad is reused here as METRES->ticks:
+               offset        = servo-4 tick at jaw CLOSED (value = 0.0 m)
+               ticks_per_rad = ticks per METRE = (open_tick - closed_tick) / 0.04
+               direction     = +1 (set -1 if OPENING the jaw DECREASES the tick)
+             CALIBRATED on hardware 2026-06-28: jaw fully CLOSED = servo-4 tick 202
+             (-> 0.0 m), fully OPEN = tick 437 (-> 0.04 m). So offset=202,
+             ticks_per_rad = (437-202)/0.04 = 5875 ticks/m, direction=+1 (tick rises
+             as the jaw opens). (Before this the value was scaled as radians, state
+             read ~-0.49 outside [0,0.04], and the gripper MoveIt group could not plan.) -->
+        <param name="offset">202</param>
+        <param name="ticks_per_rad">5875</param>
+        <param name="direction">1</param>
       </joint>
 
       <!-- gripper_right_joint: own command interface so Gazebo can physically

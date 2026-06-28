@@ -15,7 +15,6 @@
       - S1_joint
       - S2_joint
       - S3_joint
-      - S5_joint
     command_interfaces:
       - position
     state_interfaces:
@@ -35,8 +34,5 @@
         trajectory: 0.1
         goal: 0.05
       S3_joint:
-        trajectory: 0.1
-        goal: 0.05
-      S5_joint:
         trajectory: 0.1
         goal: 0.05
