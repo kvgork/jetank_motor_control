@@ -30,17 +30,18 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(robot_controller
-  src/motor/robot_controller.cpp
+# Motor driver library: compiled once, linked into both the executable and
+# the gtest target so they exercise identical object code.
+add_library(jetank_motor_lib
   src/motor/motor.cpp)
 
-add_library(jetank_motor_lib
-    src/motor/motor.cpp
-)
+add_executable(robot_controller
+  src/motor/robot_controller.cpp)
 
 ament_target_dependencies(robot_controller
   rclcpp geometry_msgs std_msgs nav_msgs tf2 tf2_ros)
 ament_target_dependencies(jetank_motor_lib rclcpp)
+target_link_libraries(robot_controller jetank_motor_lib)
 
 include_directories(include)
 
