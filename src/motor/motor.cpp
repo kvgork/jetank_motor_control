@@ -1,12 +1,13 @@
 #include "motor.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include <iostream>
 #include <unistd.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <stdexcept>
 
 #define PCA9685_ADDRESS 0x60
 #define MODE1 0x00
@@ -48,11 +49,10 @@ Motor::Motor(rclcpp::Logger logger, int motor_num, double alpha, double beta)
     }
     resetPCA9685();
     setPWMFreq(1600);
+    RCLCPP_INFO(logger_, "Motor %d initialized successfully", motor_num_);
   } catch (const std::runtime_error & e) {
     RCLCPP_ERROR(logger_, "Motor %d initializing error: %s", motor_num_, e.what());
   }
-  RCLCPP_INFO(logger_, "Motor %d initialized succesfully", motor_num_);
-
 }
 
 Motor::~Motor()
@@ -69,9 +69,9 @@ void Motor::setValue(double value)
     int speed = std::min(std::max(std::abs(mapped_value), 0), 255);
 
     setState(mapped_value, speed);
-    RCLCPP_INFO(logger_, "Motor %d value setting, value = %f", motor_num_, value);
+    RCLCPP_DEBUG(logger_, "Motor %d value setting, value = %f", motor_num_, value);
   } catch (...) {
-    RCLCPP_INFO(logger_, "Motor %d value setting failed", motor_num_);
+    RCLCPP_WARN(logger_, "Motor %d value setting failed", motor_num_);
   }
 
 }
@@ -107,20 +107,18 @@ bool Motor::openI2C()
   const char * device = "/dev/i2c-7";
   i2c_fd_ = open(device, O_RDWR);
   if (i2c_fd_ < 0) {
-    std::cerr << "Failed to open I2C device" << std::endl;
-    RCLCPP_INFO(logger_, "Failed to open I2C device, while running motor %d", motor_num_);
+    RCLCPP_ERROR(logger_, "Failed to open I2C device, while running motor %d", motor_num_);
     return false;
   }
 
   if (ioctl(i2c_fd_, I2C_SLAVE, PCA9685_ADDRESS) < 0) {
-    std::cerr << "Failed to set I2C address" << std::endl;
-    RCLCPP_INFO(logger_, "Failed to set I2C address, while running motor %d", motor_num_);
+    RCLCPP_ERROR(logger_, "Failed to set I2C address, while running motor %d", motor_num_);
     close(i2c_fd_);
     i2c_fd_ = -1;
     return false;
   }
 
-  RCLCPP_INFO(logger_, "I2C successfull, while running motor %d", motor_num_);
+  RCLCPP_INFO(logger_, "I2C successful, while running motor %d", motor_num_);
   return true;
 }
 
