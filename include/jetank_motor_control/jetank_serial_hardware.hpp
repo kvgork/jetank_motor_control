@@ -3,6 +3,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "hardware_interface/handle.hpp"
@@ -62,6 +63,12 @@ private:
       (FeetechBus::SPAN_DEGREES * 3.14159265358979323846 / 180.0);
     double prev_position = 0.0;                        // for finite-diff velocity
     bool prev_valid = false;
+    // Cached pointers into states_/commands_ (stable std::map node addresses),
+    // resolved once in on_init() so the 50 Hz read()/write() loops do no
+    // string-keyed map lookups. nullptr when the interface is not declared.
+    double * state_position = nullptr;
+    double * state_velocity = nullptr;
+    double * cmd_position = nullptr;
   };
 
   double rad_to_ticks(const ServoJoint & j, double rad) const;
@@ -77,6 +84,10 @@ private:
   std::map<std::string, std::map<std::string, double>> states_;
 
   std::vector<ServoJoint> servo_joints_;  // subset of joints with a servo_id
+
+  // Virtual (non-servo) joint mirror list: state <- command pointer pairs,
+  // precomputed in on_init() so read() avoids per-cycle name scans.
+  std::vector<std::pair<double *, double *>> mirror_pairs_;
 };
 
 }  // namespace jetank_motor_control

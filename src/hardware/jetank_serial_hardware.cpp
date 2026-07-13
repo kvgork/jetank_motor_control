@@ -87,6 +87,45 @@ hardware_interface::CallbackReturn JetankSerialHardware::on_init(
     servo_joints_.push_back(sj);
   }
 
+  // Resolve hot-loop pointers once: std::map nodes have stable addresses and
+  // no further inserts happen after this point, so read()/write() can use
+  // direct pointers instead of string-keyed lookups every 50 Hz cycle.
+  for (auto & sj : servo_joints_) {
+    const auto js = states_.find(sj.name);
+    if (js != states_.end()) {
+      const auto p = js->second.find("position");
+      sj.state_position = (p != js->second.end()) ? &p->second : nullptr;
+      const auto v = js->second.find("velocity");
+      sj.state_velocity = (v != js->second.end()) ? &v->second : nullptr;
+    }
+    const auto jc = commands_.find(sj.name);
+    if (jc != commands_.end()) {
+      const auto c = jc->second.find("position");
+      sj.cmd_position = (c != jc->second.end()) ? &c->second : nullptr;
+    }
+  }
+
+  // Precompute the virtual-joint mirror pairs (state <- command) so read()
+  // does not rescan joint names each cycle.
+  for (auto & joint : states_) {
+    const bool is_servo = std::any_of(
+      servo_joints_.begin(), servo_joints_.end(),
+      [&joint](const ServoJoint & s) {return s.name == joint.first;});
+    if (is_servo) {
+      continue;
+    }
+    const auto cmd_it = commands_.find(joint.first);
+    if (cmd_it == commands_.end()) {
+      continue;
+    }
+    for (auto & iface : joint.second) {
+      const auto c = cmd_it->second.find(iface.first);
+      if (c != cmd_it->second.end()) {
+        mirror_pairs_.emplace_back(&iface.second, &c->second);
+      }
+    }
+  }
+
   RCLCPP_INFO(
     rclcpp::get_logger(kLogger),
     "Initialized: %zu joints (%zu real servos) on %s @ %d baud",
@@ -188,9 +227,11 @@ hardware_interface::return_type JetankSerialHardware::read(
       continue;
     }
     const double rad = ticks_to_rad(sj, static_cast<double>(ticks));
-    states_[sj.name]["position"] = rad;
-    if (states_[sj.name].count("velocity")) {
-      states_[sj.name]["velocity"] =
+    if (sj.state_position != nullptr) {
+      *sj.state_position = rad;
+    }
+    if (sj.state_velocity != nullptr) {
+      *sj.state_velocity =
         (sj.prev_valid && dt > 1e-6) ? (rad - sj.prev_position) / dt : 0.0;
     }
     sj.prev_position = rad;
@@ -199,22 +240,9 @@ hardware_interface::return_type JetankSerialHardware::read(
 
   // Virtual joints (gripper_right, wheels): mirror command -> state so any
   // claiming controller sees the joint "following" perfectly.
-  for (auto & joint : states_) {
-    const bool is_servo = std::any_of(
-      servo_joints_.begin(), servo_joints_.end(),
-      [&joint](const ServoJoint & s) {return s.name == joint.first;});
-    if (is_servo) {
-      continue;
-    }
-    const auto cmd_it = commands_.find(joint.first);
-    if (cmd_it == commands_.end()) {
-      continue;
-    }
-    for (auto & iface : joint.second) {
-      const auto c = cmd_it->second.find(iface.first);
-      if (c != cmd_it->second.end() && std::isfinite(c->second)) {
-        iface.second = c->second;
-      }
+  for (const auto & pair : mirror_pairs_) {
+    if (std::isfinite(*pair.second)) {
+      *pair.first = *pair.second;
     }
   }
 
@@ -225,15 +253,10 @@ hardware_interface::return_type JetankSerialHardware::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
   for (const auto & sj : servo_joints_) {
-    const auto j = commands_.find(sj.name);
-    if (j == commands_.end()) {
-      continue;
-    }
-    const auto c = j->second.find("position");
-    if (c == j->second.end() || !std::isfinite(c->second)) {
+    if (sj.cmd_position == nullptr || !std::isfinite(*sj.cmd_position)) {
       continue;  // no valid position command yet
     }
-    double ticks = rad_to_ticks(sj, c->second);
+    double ticks = rad_to_ticks(sj, *sj.cmd_position);
     ticks = std::clamp(ticks, 0.0, static_cast<double>(FeetechBus::POSITION_MAX));
     bus_.write_goal_position(sj.id, static_cast<uint16_t>(std::lround(ticks)));
   }
