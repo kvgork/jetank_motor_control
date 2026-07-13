@@ -83,9 +83,6 @@ private:
   /// on timeout/framing/checksum error.
   bool recv_packet(uint8_t expected_id, std::vector<uint8_t> & params, uint8_t expected_param_len);
 
-  /// Blocking read of n bytes with a per-call timeout. Returns bytes read.
-  int read_bytes(uint8_t * buf, int n, int timeout_ms);
-
   int fd_ = -1;
   /// Last instruction packet sent, used to strip the TX echo that this UART
   /// reflects on the shared half-duplex line before the servo's reply.

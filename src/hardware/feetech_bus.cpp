@@ -1,10 +1,12 @@
 #include "jetank_motor_control/feetech_bus.hpp"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <numeric>
 
@@ -13,6 +15,10 @@ namespace jetank_motor_control
 
 namespace
 {
+/// Reply-wait ceiling per transaction. Matches the previous implementation's
+/// 60 * 0.2 ms usleep-spin budget so timeout semantics are unchanged.
+constexpr int kReplyTimeoutMs = 12;
+
 /// Map an integer baud rate to a termios speed_t constant. Returns B0 if the
 /// rate is unsupported (caller treats B0 as failure).
 speed_t to_speed(int baud)
@@ -87,24 +93,6 @@ void FeetechBus::close()
   }
 }
 
-int FeetechBus::read_bytes(uint8_t * buf, int n, int timeout_ms)
-{
-  int got = 0;
-  // Simple poll loop; the bus is fast (1 Mbps) so total wait is short.
-  for (int waited = 0; got < n && waited < timeout_ms; ) {
-    const ssize_t r = ::read(fd_, buf + got, n - got);
-    if (r > 0) {
-      got += static_cast<int>(r);
-    } else if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-      break;
-    } else {
-      usleep(200);          // 0.2 ms
-      waited += 1;          // approximate; coarse but adequate for framing
-    }
-  }
-  return got;
-}
-
 bool FeetechBus::send_packet(
   uint8_t id, uint8_t instruction, const std::vector<uint8_t> & params)
 {
@@ -149,7 +137,9 @@ bool FeetechBus::recv_packet(
   std::vector<uint8_t> buf;
   buf.reserve(status_len + last_tx_.size() + 8);
 
-  for (int waited = 0; waited < 60; ) {        // ~12 ms ceiling (60 * 0.2 ms)
+  const auto deadline =
+    std::chrono::steady_clock::now() + std::chrono::milliseconds(kReplyTimeoutMs);
+  while (true) {
     uint8_t tmp[64];
     const ssize_t r = ::read(fd_, tmp, sizeof(tmp));
     if (r > 0) {
@@ -184,8 +174,23 @@ bool FeetechBus::recv_packet(
     } else if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
       break;
     } else {
-      usleep(200);
-      waited += 1;
+      // No data pending: block on poll(2) until bytes arrive or the deadline
+      // passes, instead of busy-spinning with usleep. A present reply still
+      // returns as soon as its frame parses; an absent reply pays at most
+      // kReplyTimeoutMs, exactly as before.
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) {
+        break;
+      }
+      const int remaining_ms = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count()) + 1;
+      pollfd pfd{};
+      pfd.fd = fd_;
+      pfd.events = POLLIN;
+      const int pr = ::poll(&pfd, 1, remaining_ms);
+      if (pr < 0 && errno != EINTR) {
+        break;
+      }
     }
   }
   return false;
