@@ -5,31 +5,18 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# find dependencies (only packages actually compiled/linked against; runtime
+# packages such as controller_manager live in package.xml as exec_depends)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
-find_package(control_msgs REQUIRED)
-find_package(ros2_control REQUIRED)
-find_package(ros2_controllers REQUIRED)
-find_package(controller_manager REQUIRED)
 find_package(hardware_interface REQUIRED)
-# find_package(joint_state_publisher REQUIRED) Should only be needed for executing
-# find_package(robot_state_publisher REQUIRED)
-find_package(trajectory_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
-# find_package(serial REQUIRED) Not in ROS2
-find_package(diagnostic_msgs REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GPIOD REQUIRED libgpiod)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -52,7 +39,7 @@ add_library(jetank_motor_lib
 )
 
 ament_target_dependencies(robot_controller
-  rclcpp geometry_msgs std_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs)
+  rclcpp geometry_msgs std_msgs nav_msgs tf2 tf2_ros)
 ament_target_dependencies(jetank_motor_lib rclcpp)
 
 include_directories(include)
@@ -91,9 +78,6 @@ install(DIRECTORY config launch
 # Install hardware interface plugin description
 install(FILES jetank_hardware.xml
   DESTINATION share/${PROJECT_NAME})
-
-target_include_directories(robot_controller PRIVATE ${GPIOD_INCLUDE_DIRS})
-target_link_libraries(robot_controller ${GPIOD_LIBRARIES})
 
 target_include_directories(jetank_motor_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

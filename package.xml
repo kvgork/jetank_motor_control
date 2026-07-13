@@ -27,10 +27,11 @@
   <depend>diagnostic_msgs</depend>
   <depend>std_srvs</depend>
 
-  <!-- ros2_control -->
-  <depend>ros2_control</depend>
-  <depend>ros2_controllers</depend>
-  <depend>controller_manager</depend>
+  <!-- ros2_control (hardware_interface is compiled against; the controller
+       stack is only needed at launch/run time) -->
+  <exec_depend>ros2_control</exec_depend>
+  <exec_depend>ros2_controllers</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
   <depend>hardware_interface</depend>
 
   <!-- Controllers -->
