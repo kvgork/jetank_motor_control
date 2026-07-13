@@ -40,8 +40,10 @@
   <depend>joint_state_broadcaster</depend>
   <depend>diff_drive_controller</depend>
 
-  <!-- Gazebo simulation -->
-  <depend>gazebo_ros2_control</depend>
+  <!-- Gazebo simulation: config/ros2_control.xacro loads
+       ign_ros2_control/IgnitionSystem when use_sim:=true (Gazebo Fortress;
+       the workspace does not use Gazebo Classic) -->
+  <exec_depend>ign_ros2_control</exec_depend>
 
   <!-- Robot description -->
   <depend>xacro</depend>
