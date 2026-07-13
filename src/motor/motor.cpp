@@ -6,6 +6,7 @@
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 #include <cmath>
+#include <cstring>
 
 #define PCA9685_ADDRESS 0x60
 #define MODE1 0x00
@@ -16,6 +17,7 @@
 // Bits
 #define SLEEP 0x10
 #define ALLCALL 0x01
+#define AI 0x20      // MODE1 register auto-increment
 #define OUTDRV 0x04
 
 Motor::Motor(rclcpp::Logger logger, int motor_num, double alpha, double beta)
@@ -138,6 +140,28 @@ bool Motor::writeRegister(uint8_t reg, uint8_t value)
   return true;
 }
 
+bool Motor::writeRegisters(uint8_t reg, const uint8_t * data, size_t len)
+{
+  if (i2c_fd_ < 0) {
+    RCLCPP_ERROR(logger_, "I2C not initialized");
+    return false;
+  }
+
+  uint8_t buffer[8];
+  if (len + 1 > sizeof(buffer)) {
+    RCLCPP_ERROR(logger_, "I2C burst too long: %zu bytes", len);
+    return false;
+  }
+  buffer[0] = reg;
+  std::memcpy(buffer + 1, data, len);
+  const ssize_t result = write(i2c_fd_, buffer, len + 1);
+  if (result != static_cast<ssize_t>(len + 1)) {
+    RCLCPP_ERROR(logger_, "I2C burst write failed: reg=0x%02X, len=%zu", reg, len);
+    return false;
+  }
+  return true;
+}
+
 bool Motor::readRegister(uint8_t reg, uint8_t & value)
 {
   if (write(i2c_fd_, &reg, 1) != 1) {
@@ -157,12 +181,13 @@ void Motor::resetPCA9685()
   writeRegister(MODE1, 0x00);    // Clear all bits first
   usleep(1000);
 
-  // Wake up (clear sleep bit) and enable auto-increment
-  writeRegister(MODE1, ALLCALL);
+  // Wake up and enable register auto-increment (AI, 0x20) so setPWM can burst
+  // all four LEDn registers in a single I2C transaction.
+  writeRegister(MODE1, ALLCALL | AI);
   usleep(1000);
 
   // Read current mode
-  uint8_t mode1;
+  uint8_t mode1 = 0;
   readRegister(MODE1, mode1);
 
   // Clear sleep bit (wake up)
@@ -173,6 +198,15 @@ void Motor::resetPCA9685()
   // Set output driver to totem pole
   writeRegister(MODE2, OUTDRV);
   usleep(1000);
+
+  // Burst writes are only safe if AI is verifiably enabled; otherwise setPWM
+  // keeps the single-register fallback.
+  uint8_t verify = 0;
+  auto_increment_ = readRegister(MODE1, verify) && (verify & AI) != 0;
+  if (!auto_increment_) {
+    RCLCPP_WARN(
+      logger_, "PCA9685 auto-increment not confirmed; using single-register writes");
+  }
 
   RCLCPP_INFO(logger_, "PCA9685 reset completed");
 }
@@ -196,6 +230,18 @@ void Motor::setPWMFreq(int freq)
 void Motor::setPWM(int channel, int on, int off)
 {
   uint8_t reg = LED0_ON_L + 4 * channel;
+  if (auto_increment_) {
+    // MODE1 AI is enabled: write LEDn_ON_L..LEDn_OFF_H as one 5-byte transfer.
+    const uint8_t data[4] = {
+      static_cast<uint8_t>(on & 0xFF),
+      static_cast<uint8_t>((on >> 8) & 0xFF),
+      static_cast<uint8_t>(off & 0xFF),
+      static_cast<uint8_t>((off >> 8) & 0xFF)};
+    if (writeRegisters(reg, data, sizeof(data))) {
+      return;
+    }
+    // Burst failed; fall through to single-register writes.
+  }
   writeRegister(reg, on & 0xFF);
   writeRegister(reg + 1, on >> 8);
   writeRegister(reg + 2, off & 0xFF);
