@@ -1,26 +1,21 @@
 <!--
   pluginlib description for the real-hardware ros2_control SystemInterface.
 
-  STATUS: stub / not yet implemented. The class below is referenced by
-  config/ros2_control.xacro (the <xacro:unless use_sim> branch uses
-  <plugin>jetank_motor_control/JetankSerialHardware</plugin>), but there is no
-  C++ implementation yet (src/ only builds the diff-drive `robot_controller`
-  node + `jetank_motor_lib`). The real robot currently drives via that node, not
-  via a ros2_control hardware interface.
-
-  To enable this plugin: add the JetankSerialHardware source + a shared library
-  target in CMakeLists.txt, PLUGINLIB_EXPORT_CLASS it, and register this file
-  with `pluginlib_export_plugin_description_file(hardware_interface
-  jetank_hardware.xml)`. The class name here is kept consistent with the xacro
-  reference (`jetank_motor_control` namespace) so no rename is needed then.
+  Implemented in src/hardware/jetank_serial_hardware.cpp and built as the shared
+  library `jetank_serial_hardware` (see CMakeLists.txt). Selected by the robot
+  description when the xacro is processed with `hardware:=serial`
+  (config/ros2_control.xacro / jetank_ros2_control.urdf.xacro). Registered via
+  pluginlib_export_plugin_description_file(hardware_interface jetank_hardware.xml).
 -->
-<library path="jetank_motor_control">
+<library path="jetank_serial_hardware">
   <class name="jetank_motor_control/JetankSerialHardware"
          type="jetank_motor_control::JetankSerialHardware"
          base_class_type="hardware_interface::SystemInterface">
     <description>
-      Hardware interface for JeTank ST/SC serial bus servos.
-      Communicates via UART at 1Mbps with daisy-chained servos.
+      Hardware interface for JeTank ST/SC (Feetech SMS/STS) serial bus servos.
+      Communicates via UART (default /dev/ttyTHS1 @ 1Mbps) with daisy-chained
+      servos. Joints with a servo_id param drive a real servo; joints without
+      one (gripper_right mimic, wheels) mirror command to state.
     </description>
   </class>
 </library>

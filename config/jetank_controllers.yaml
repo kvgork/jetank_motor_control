@@ -34,15 +34,16 @@ controller_manager:
 
 
 # ============================================
-# ARM CONTROLLER (4-DOF: S1, S2, S3, S5)
+# ARM CONTROLLER (3-DOF: S1, S2, S3)
 # ============================================
+# S5 (servo 5, camera) is left OUT of MoveIt and out of this controller — it stays a
+# torque-held hardware interface, not planned or commanded. S4 is the fixed wrist stub.
 arm_controller:
   ros__parameters:
     joints:
       - S1_joint
       - S2_joint
       - S3_joint
-      - S5_joint  # S4 removed - servo 4 controls gripper
 
     command_interfaces:
       - position
@@ -69,9 +70,6 @@ arm_controller:
         trajectory: 0.1
         goal: 0.05
       S3_joint:
-        trajectory: 0.1
-        goal: 0.05
-      S5_joint:
         trajectory: 0.1
         goal: 0.05
 

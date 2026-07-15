@@ -1,0 +1,13 @@
+# Per-controller parameter file for the STANDALONE controller_manager path
+# (moveit_bringup.launch.py, hardware/mock). See arm_controller.yaml for why the
+# bare `/**` wildcard key is required on controller_manager 2.54.
+#
+# Keep in sync with the `gripper_controller:` section of jetank_controllers.yaml.
+/**:
+  ros__parameters:
+    joint: gripper_left_joint
+    max_effort: 5.0
+    allow_stalling: true
+    stall_velocity_threshold: 0.0001
+    stall_timeout: 10.0
+    goal_tolerance: 0.005

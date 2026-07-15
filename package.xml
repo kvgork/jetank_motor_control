@@ -14,34 +14,42 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>pluginlib</depend>
 
-  <!-- Messages -->
+  <!-- Messages compiled against (see CMakeLists find_package list) -->
   <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>control_msgs</depend>
-  <depend>trajectory_msgs</depend>
-  <depend>diagnostic_msgs</depend>
-  <depend>std_srvs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <!-- control_msgs is not compiled against here; it is the runtime action
+       interface (GripperCommand) of the gripper_controller spawned from
+       config/jetank_controllers.yaml -->
+  <exec_depend>control_msgs</exec_depend>
 
-  <!-- ros2_control -->
-  <depend>ros2_control</depend>
-  <depend>ros2_controllers</depend>
-  <depend>controller_manager</depend>
+  <!-- ros2_control (hardware_interface is compiled against; the controller
+       stack is only needed at launch/run time) -->
+  <exec_depend>ros2_control</exec_depend>
+  <exec_depend>ros2_controllers</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
   <depend>hardware_interface</depend>
 
-  <!-- Controllers -->
-  <depend>joint_trajectory_controller</depend>
-  <depend>position_controllers</depend>
-  <depend>joint_state_broadcaster</depend>
-  <depend>diff_drive_controller</depend>
+  <!-- Controllers (runtime-only: spawned from config/jetank_controllers.yaml,
+       never compiled against) -->
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>position_controllers</exec_depend>
+  <exec_depend>gripper_controllers</exec_depend>
+  <exec_depend>forward_command_controller</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>diff_drive_controller</exec_depend>
 
-  <!-- Gazebo simulation -->
-  <depend>gazebo_ros2_control</depend>
+  <!-- Gazebo simulation: config/ros2_control.xacro loads
+       ign_ros2_control/IgnitionSystem when use_sim:=true (Gazebo Fortress;
+       the workspace does not use Gazebo Classic) -->
+  <exec_depend>ign_ros2_control</exec_depend>
 
-  <!-- Robot description -->
-  <depend>xacro</depend>
-  <depend>joint_state_publisher</depend>
-  <depend>robot_state_publisher</depend>
+  <!-- Robot description tooling (runtime-only: used by launch files) -->
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
