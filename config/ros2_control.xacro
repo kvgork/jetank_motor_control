@@ -43,6 +43,14 @@
             <plugin>jetank_motor_control/JetankSerialHardware</plugin>
             <param name="serial_port">/dev/ttyTHS1</param>
             <param name="baud_rate">1000000</param>
+            <!-- Reply-wait policy for WRITE instructions. true (safe default)
+                 = wait for/consume each servo's status packet after a write,
+                 as the factory-default SCS status-return level replies to
+                 everything. Set to false ONLY after configuring the servos
+                 for no-reply mode on writes: write() then skips the reply
+                 wait (saves up to ~12 ms/servo/cycle at 50 Hz). HW-tuning
+                 flag — validate on the physical arm before changing. -->
+            <param name="expect_write_replies">true</param>
           </hardware>
         </xacro:unless>
       </xacro:unless>

@@ -43,6 +43,17 @@ public:
   /// Probe a servo. Returns true if it responds to a PING.
   bool ping(uint8_t id);
 
+  /// Whether WRITE instructions are expected to elicit a status reply.
+  /// The SCS status-return level (SRM) is factory-default "reply to
+  /// everything"; this driver does not (yet) reconfigure it, so the safe
+  /// default is true: after a WRITE we wait (poll deadline) to consume the
+  /// status packet. Set to false only when the servos are configured for
+  /// no-reply mode on writes — then write_register returns immediately after
+  /// TX, saving up to the reply timeout per servo per write() cycle. READ and
+  /// PING always wait for their reply regardless of this flag.
+  void set_expect_write_replies(bool expect) {expect_write_replies_ = expect;}
+  bool expect_write_replies() const {return expect_write_replies_;}
+
   /// Enable/disable torque on a servo.
   bool set_torque(uint8_t id, bool on);
 
@@ -74,19 +85,32 @@ private:
     INST_WRITE = 0x03
   };
 
-  bool write_register(uint8_t id, uint8_t reg, const std::vector<uint8_t> & data);
+  bool write_register(uint8_t id, uint8_t reg, const uint8_t * data, size_t data_len);
   bool read_register(uint8_t id, uint8_t reg, uint8_t length, std::vector<uint8_t> & out);
 
-  /// Send a raw instruction packet (header/len/checksum added here).
-  bool send_packet(uint8_t id, uint8_t instruction, const std::vector<uint8_t> & params);
+  /// Send a raw instruction packet (header/len/checksum added here). The
+  /// packet is assembled in the reusable last_tx_ member buffer — no per-call
+  /// heap allocation in the steady state (50 Hz read/write path).
+  bool send_packet(uint8_t id, uint8_t instruction, const uint8_t * params, size_t param_len);
   /// Read a status packet body (params only, checksum verified). Returns false
   /// on timeout/framing/checksum error.
   bool recv_packet(uint8_t expected_id, std::vector<uint8_t> & params, uint8_t expected_param_len);
 
   int fd_ = -1;
-  /// Last instruction packet sent, used to strip the TX echo that this UART
-  /// reflects on the shared half-duplex line before the servo's reply.
+  /// Skip the reply-wait after WRITE instructions when false (see setter).
+  bool expect_write_replies_ = true;
+  /// Last instruction packet sent — send_packet builds the frame directly in
+  /// this buffer (capacity reused across calls) and recv_packet uses it to
+  /// strip the TX echo that this UART reflects on the shared half-duplex line.
   std::vector<uint8_t> last_tx_;
+  /// RX accumulation buffer for recv_packet — reused across calls so the
+  /// 50 Hz path performs no per-transaction heap allocation.
+  std::vector<uint8_t> rx_buf_;
+  /// Scratch buffer for instruction params / status params. Never live across
+  /// a nested call that also uses it: write_register finishes with it before
+  /// reusing it for the status reply, and read paths pass it only to one
+  /// stage at a time. Not thread-safe — neither is the bus itself.
+  std::vector<uint8_t> scratch_;
 };
 
 }  // namespace jetank_motor_control

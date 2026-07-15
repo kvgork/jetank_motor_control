@@ -40,6 +40,25 @@ hardware_interface::CallbackReturn JetankSerialHardware::on_init(
         it->second.c_str(), baud_rate_);
     }
   }
+  // Reply-wait policy for WRITE instructions. Conservative default (true)
+  // preserves the original behavior: wait for/consume the status packet after
+  // each write. Only set false once the servos' status-return level is
+  // configured for no-reply on writes (HW tuning flag).
+  it = info_.hardware_parameters.find("expect_write_replies");
+  if (it != info_.hardware_parameters.end()) {
+    const std::string & v = it->second;
+    if (v == "false" || v == "False" || v == "FALSE" || v == "0") {
+      expect_write_replies_ = false;
+    } else if (v == "true" || v == "True" || v == "TRUE" || v == "1") {
+      expect_write_replies_ = true;
+    } else {
+      RCLCPP_WARN(
+        rclcpp::get_logger(kLogger),
+        "Invalid expect_write_replies '%s'; using %s", v.c_str(),
+        expect_write_replies_ ? "true" : "false");
+    }
+  }
+  bus_.set_expect_write_replies(expect_write_replies_);
 
   // Allocate generic storage for every declared interface and identify the
   // joints backed by a real servo (those carrying a `servo_id` param).
@@ -128,8 +147,10 @@ hardware_interface::CallbackReturn JetankSerialHardware::on_init(
 
   RCLCPP_INFO(
     rclcpp::get_logger(kLogger),
-    "Initialized: %zu joints (%zu real servos) on %s @ %d baud",
-    info_.joints.size(), servo_joints_.size(), serial_port_.c_str(), baud_rate_);
+    "Initialized: %zu joints (%zu real servos) on %s @ %d baud "
+    "(expect_write_replies=%s)",
+    info_.joints.size(), servo_joints_.size(), serial_port_.c_str(), baud_rate_,
+    expect_write_replies_ ? "true" : "false");
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }

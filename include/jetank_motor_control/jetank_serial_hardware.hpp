@@ -77,6 +77,13 @@ private:
   FeetechBus bus_;
   std::string serial_port_ = "/dev/ttyTHS1";
   int baud_rate_ = 1000000;
+  // Whether servos reply to WRITE instructions (SCS status-return level).
+  // Default true = wait for/consume the status packet after every write,
+  // exactly the pre-existing behavior. Set the `expect_write_replies` hardware
+  // param to false ONLY after configuring the servos' SRM register for
+  // no-reply mode on writes — then write() skips the reply-wait entirely
+  // (saves up to ~12 ms per servo per 50 Hz cycle). Needs HW validation.
+  bool expect_write_replies_ = true;
 
   // Generic per-(joint,interface) storage. std::map gives stable element
   // addresses across inserts, which the exported Handles point into.

@@ -94,30 +94,32 @@ void FeetechBus::close()
 }
 
 bool FeetechBus::send_packet(
-  uint8_t id, uint8_t instruction, const std::vector<uint8_t> & params)
+  uint8_t id, uint8_t instruction, const uint8_t * params, size_t param_len)
 {
   if (fd_ < 0) {
     return false;
   }
-  const uint8_t length = static_cast<uint8_t>(params.size() + 2);
+  const uint8_t length = static_cast<uint8_t>(param_len + 2);
 
-  std::vector<uint8_t> packet;
-  packet.reserve(params.size() + 6);
-  packet.push_back(0xFF);
-  packet.push_back(0xFF);
-  packet.push_back(id);
-  packet.push_back(length);
-  packet.push_back(instruction);
-  packet.insert(packet.end(), params.begin(), params.end());
+  // Assemble the frame directly in last_tx_: it doubles as the echo-strip
+  // reference for recv_packet, and reusing its capacity means no per-call
+  // heap allocation in the 50 Hz read/write path.
+  last_tx_.clear();
+  last_tx_.reserve(param_len + 6);  // no-op once capacity is warm
+  last_tx_.push_back(0xFF);
+  last_tx_.push_back(0xFF);
+  last_tx_.push_back(id);
+  last_tx_.push_back(length);
+  last_tx_.push_back(instruction);
+  last_tx_.insert(last_tx_.end(), params, params + param_len);
 
   uint32_t sum = id + length + instruction;
-  sum = std::accumulate(params.begin(), params.end(), sum);
-  packet.push_back(static_cast<uint8_t>(~sum & 0xFF));
+  sum = std::accumulate(params, params + param_len, sum);
+  last_tx_.push_back(static_cast<uint8_t>(~sum & 0xFF));
 
-  tcflush(fd_, TCIFLUSH);  // drop any stale bytes before a fresh transaction
-  last_tx_ = packet;       // remembered so recv_packet can strip the TX echo
-  const ssize_t written = ::write(fd_, packet.data(), packet.size());
-  return written == static_cast<ssize_t>(packet.size());
+  tcflush(fd_, TCIFLUSH);  // drop any stale bytes (incl. unread echoes) first
+  const ssize_t written = ::write(fd_, last_tx_.data(), last_tx_.size());
+  return written == static_cast<ssize_t>(last_tx_.size());
 }
 
 bool FeetechBus::recv_packet(
@@ -134,7 +136,10 @@ bool FeetechBus::recv_packet(
   // returning as soon as a valid status frame is found (so a present reply does
   // not pay the full timeout). The echo is a valid instruction packet with the
   // same id, so we skip a leading copy of last_tx_ before scanning.
-  std::vector<uint8_t> buf;
+  // rx_buf_ is a reusable member: clear() keeps its capacity, so the 50 Hz
+  // path performs no per-transaction heap allocation once warm.
+  std::vector<uint8_t> & buf = rx_buf_;
+  buf.clear();
   buf.reserve(status_len + last_tx_.size() + 8);
 
   const auto deadline =
@@ -197,28 +202,34 @@ bool FeetechBus::recv_packet(
 }
 
 bool FeetechBus::write_register(
-  uint8_t id, uint8_t reg, const std::vector<uint8_t> & data)
+  uint8_t id, uint8_t reg, const uint8_t * data, size_t data_len)
 {
-  std::vector<uint8_t> params;
-  params.reserve(data.size() + 1);
-  params.push_back(reg);
-  params.insert(params.end(), data.begin(), data.end());
-  if (!send_packet(id, INST_WRITE, params)) {
+  // Build [reg, data...] in the reusable scratch buffer (capacity kept across
+  // calls — no per-call allocation once warm).
+  scratch_.clear();
+  scratch_.reserve(data_len + 1);
+  scratch_.push_back(reg);
+  scratch_.insert(scratch_.end(), data, data + data_len);
+  if (!send_packet(id, INST_WRITE, scratch_.data(), scratch_.size())) {
     return false;
   }
-  // A WRITE elicits a status packet with no params (unless the servo is in
-  // no-reply mode). Consume it if present, but do not fail the write if the
-  // servo is configured to stay silent on writes.
-  std::vector<uint8_t> resp;
-  recv_packet(id, resp, 0);
+  if (expect_write_replies_) {
+    // Default SRM (status return level) replies to every instruction: consume
+    // the zero-param status packet if present (poll deadline as before), but
+    // do not fail the write if the servo stays silent.
+    recv_packet(id, scratch_, 0);
+  }
+  // else: servos configured for no-reply mode on writes — return immediately.
+  // Any unexpected reply/echo bytes left on the line are flushed by the
+  // tcflush(TCIFLUSH) at the start of the next send_packet.
   return true;
 }
 
 bool FeetechBus::read_register(
   uint8_t id, uint8_t reg, uint8_t length, std::vector<uint8_t> & out)
 {
-  const std::vector<uint8_t> params{reg, length};
-  if (!send_packet(id, INST_READ, params)) {
+  const uint8_t params[2] = {reg, length};
+  if (!send_packet(id, INST_READ, params, sizeof(params))) {
     return false;
   }
   return recv_packet(id, out, length);
@@ -226,34 +237,33 @@ bool FeetechBus::read_register(
 
 bool FeetechBus::ping(uint8_t id)
 {
-  if (!send_packet(id, INST_PING, {})) {
+  if (!send_packet(id, INST_PING, nullptr, 0)) {
     return false;
   }
-  std::vector<uint8_t> resp;
-  return recv_packet(id, resp, 0);
+  return recv_packet(id, scratch_, 0);
 }
 
 bool FeetechBus::set_torque(uint8_t id, bool on)
 {
-  return write_register(id, REG_TORQUE_ENABLE, {static_cast<uint8_t>(on ? 1 : 0)});
+  const uint8_t value = on ? 1 : 0;
+  return write_register(id, REG_TORQUE_ENABLE, &value, 1);
 }
 
 bool FeetechBus::write_goal_position(uint8_t id, uint16_t ticks)
 {
   // SCS is BIG-endian: high byte first.
-  const std::vector<uint8_t> data{
+  const uint8_t data[2] = {
     static_cast<uint8_t>((ticks >> 8) & 0xFF),
     static_cast<uint8_t>(ticks & 0xFF)};
-  return write_register(id, REG_GOAL_POSITION, data);
+  return write_register(id, REG_GOAL_POSITION, data, sizeof(data));
 }
 
 bool FeetechBus::read_present_position(uint8_t id, uint16_t & ticks)
 {
-  std::vector<uint8_t> out;
-  if (!read_register(id, REG_PRESENT_POSITION, 2, out) || out.size() != 2) {
+  if (!read_register(id, REG_PRESENT_POSITION, 2, scratch_) || scratch_.size() != 2) {
     return false;
   }
-  ticks = static_cast<uint16_t>((out[0] << 8) | out[1]);  // SCS big-endian
+  ticks = static_cast<uint16_t>((scratch_[0] << 8) | scratch_[1]);  // SCS big-endian
   return true;
 }
 
