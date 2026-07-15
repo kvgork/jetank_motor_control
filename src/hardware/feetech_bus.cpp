@@ -5,6 +5,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <cassert>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -100,6 +101,14 @@ bool FeetechBus::send_packet(
     return false;
   }
   const uint8_t length = static_cast<uint8_t>(param_len + 2);
+
+  // params must not alias last_tx_ — the frame is assembled into last_tx_
+  // (clear + push_back) while reading through params, so a pointer into
+  // last_tx_ would be read after invalidation. Debug-build guard only.
+  assert(
+    params == nullptr || param_len == 0 ||
+    params + param_len <= last_tx_.data() ||
+    params >= last_tx_.data() + last_tx_.capacity());
 
   // Assemble the frame directly in last_tx_: it doubles as the echo-strip
   // reference for recv_packet, and reusing its capacity means no per-call
@@ -220,8 +229,13 @@ bool FeetechBus::write_register(
     recv_packet(id, scratch_, 0);
   }
   // else: servos configured for no-reply mode on writes — return immediately.
-  // Any unexpected reply/echo bytes left on the line are flushed by the
-  // tcflush(TCIFLUSH) at the start of the next send_packet.
+  // NOTE: this is ONLY safe when the servos' status-return level (SRM) is
+  // actually configured to no-reply-on-write (see set_expect_write_replies).
+  // If a servo still replies, a status packet may be in flight when our next
+  // TX starts: on this shared half-duplex line that is bus contention — the
+  // tcflush(TCIFLUSH) at the start of the next send_packet drops received
+  // bytes from the kernel buffer, but it cannot prevent the electrical
+  // collision from corrupting the outgoing instruction and/or the reply.
   return true;
 }
 

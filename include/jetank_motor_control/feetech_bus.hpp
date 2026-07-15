@@ -91,6 +91,9 @@ private:
   /// Send a raw instruction packet (header/len/checksum added here). The
   /// packet is assembled in the reusable last_tx_ member buffer — no per-call
   /// heap allocation in the steady state (50 Hz read/write path).
+  /// `params` must NOT alias last_tx_: the frame is built into last_tx_
+  /// (clear + push_back) while reading through `params`, so a pointer into
+  /// last_tx_ would be read after invalidation (asserted in debug builds).
   bool send_packet(uint8_t id, uint8_t instruction, const uint8_t * params, size_t param_len);
   /// Read a status packet body (params only, checksum verified). Returns false
   /// on timeout/framing/checksum error.
